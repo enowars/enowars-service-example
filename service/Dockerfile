@@ -4,8 +4,13 @@ FROM python:3-alpine
 # Create a seperate user and chown new directories if necesary
 RUN addgroup --system service
 RUN adduser --system --ingroup service --uid 1000 service
+
+# Create our mapped data volume endpoint
 RUN mkdir /data/
 RUN chown service:service /data/
+
+# Copy our service
+COPY src/ /service/
 
 # Run the following commands as 'service'
 USER service
