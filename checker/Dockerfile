@@ -1,13 +1,19 @@
 FROM python:3.7
 
+# Create user
+RUN useradd -ms /bin/bash -u 1000 checker
+RUN mkdir /checker /data
+RUN chown checker:checker /checker /data
+
+USER checker
 WORKDIR /checker
 
 # Install all required dependencies for the checker.
-COPY ./requirements.txt /checker/requirements.txt
+COPY ./src/requirements.txt /checker/requirements.txt
 RUN pip3 install -r requirements.txt
 
 # Copy all files into the container.
-COPY checker.py gunicorn.conf.py ./
+COPY ./src/ /checker/
 
 
-ENTRYPOINT [ "gunicorn", "-c", "gunicorn.conf.py", "checker:app" ]
+ENTRYPOINT [ "/home/checker/.local/bin/gunicorn", "-c", "gunicorn.conf.py", "checker:app" ]
