@@ -1,0 +1,13 @@
+version: '2.3'
+services:
+  n0t3b00k:
+    # Our Dockerfile is in the ./code/ folder.
+    build: ./code/
+    # We want to mount the code read-only, so that RCE or arbitrary write exploits can't break the service.
+    # Mount the data folder writable, so that information can be persisted across restarts.
+    volumes:
+      - ./code/:/service:ro
+      - ./data/:/data:rw
+    # Define the port mapping (external:internal port)
+    ports:
+      - "2323:8000"
