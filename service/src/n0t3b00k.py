@@ -158,7 +158,6 @@ get ID\n""".encode())
                     continue
                 elif line[:3] == "get":
                     h = line[4:]
-                    print(self.notes.keys())
                     if not h in self.notes.keys():
                         client.send("This note does not exist!\n".encode())
                         continue
