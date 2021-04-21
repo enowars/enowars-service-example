@@ -7,6 +7,9 @@ RUN adduser --system --ingroup service --uid 1000 service
 RUN mkdir /data/
 RUN chown service:service /data/
 
+# Copy in the service
+COPY src /service
+
 # Run the following commands as 'service'
 USER service
 # Change the working directory.
