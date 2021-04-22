@@ -21,7 +21,7 @@ class N0t3b00kChecker(BaseChecker):
     ##### EDIT YOUR CHECKER PARAMETERS
     flag_count = 1
     noise_count = 1
-    havoc_count = 0
+    havoc_count = 2
     service_name = "n0t3b00k"
     port = 2323  # The port will automatically be picked up as default by self.connect and self.http.
     ##### END CHECKER PARAMETERS
@@ -266,7 +266,59 @@ class N0t3b00kChecker(BaseChecker):
                 If nothing is returned, the service status is considered okay.
                 The preferred way to report Errors in the service is by raising an appropriate EnoException
         """
-        self.info("I wanted to inform you: I'm  running <3")
+        try:
+            conn = self.connect()
+            welcome = conn.read_until(">")
+
+            if self.flag_idx == 0:
+                # In variant 1, we'll check if the help text is available
+                conn.write(f"help\n")
+                self.debug(f"Sent help command")
+                is_ok = conn.read_until('>')
+                for line in ['This is a notebook service. Commands:', 'reg USER PW - Register new account', 'log USER PW - Login to account', 'set TEXT..... - Set a note', 'user  - List all users', 'list - List all notes', 'exit - Exit!', 'dump - Dump the database', 'get ID']:
+                    if not line.encode() in is_ok:
+                        raise BrokenServiceException("Failed to login")
+
+            elif self.flag_idx == 1:
+                # In variant 2, we'll check if the `user` command still works.
+                flag_username = None
+                noise_username = None
+                try:
+                    flag_username = self.team_db[self.flag_key() + "username"]
+                except Exception:
+                    pass
+                try:
+                    noise_username = self.team_db[self.noise_key() + "username"]
+                except Exception:
+                    pass
+
+                conn.write(f"user\n")
+                self.debug(f"Sent user command")
+                is_ok = conn.read_until('>')
+                if not 'User 0: '.encode() in is_ok:
+                    raise BrokenServiceException("User command does not return any users")
+
+                if flag_username:
+                    if not flag_username.encode() in is_ok:
+                        raise BrokenServiceException("Flag username not in user output")
+                if noise_username:
+                    if not noise_username.encode() in is_ok:
+                        raise BrokenServiceException("Flag username not in user output")
+
+            else:
+                raise EnoException("Got a unknown variant id")
+
+            # Exit!
+            conn.write(f"exit\n")
+            conn.close()
+
+        except EOFError:
+            raise OfflineException("Encountered unexpected EOF")
+        except UnicodeError:
+            self.debug("UTF8 Decoding-Error")
+            raise BrokenServiceException("Fucked UTF8")
+        except KeyError:
+            raise BrokenServiceException("Noise not found!")
 
     def exploit(self):
         """
