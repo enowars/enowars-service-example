@@ -143,4 +143,20 @@ Use this repository as the base structure for your service. Please keep the dire
 
 # Required changes
 
-You'll probably want to through all of these files and replace `n0t3b00k` with your service's name accordingly. 
+- You'll probably want to through all of these files and replace `n0t3b00k` with your service's name accordingly. 
+
+- Assign your service a unique port. (See `service/docker-compose.yml`, `service/Dockerfile`, `service/src/n0t3b00k.py` and `checker/checker.py`)
+
+# Checking your service
+
+You will have to implement a checker script, which periodically interacts with your service to store and retrieve flags and checks if it still behaves correctly. The game engine will call your checker during a CTF. However, you can also perform all game engine call manually in your local development environment. 
+
+- First, start your service with `cd service` and `docker-compose up --build`. 
+- Next, start your checker with `cd checker` and `docker-compose up --build`. The checker launches a web interface on the port configured in its `docker-compose.yml`.
+- Browse to `http://localhost:<checker-port>` to reach the checker interface.
+
+Use the interface to call your different checker methods. TODO add screenshots?
+
+# Questions?
+
+We understand that this can be a bit overwhelming at first, but you'll quickly get used to the workflow. Nonetheless, *please* reach out to us if you're having problems getting started or something is unclear.
