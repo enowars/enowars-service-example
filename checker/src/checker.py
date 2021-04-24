@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
-from enochecker import *
+from enochecker import BaseChecker, BrokenServiceException, EnoException, run
+from enochecker.utils import SimpleSocket, assert_equals, assert_in
 import random
 import string
+
 
 class N0t3b00kChecker(BaseChecker):
     """
@@ -26,74 +28,78 @@ class N0t3b00kChecker(BaseChecker):
     port = 2323  # The port will automatically be picked up as default by self.connect and self.http.
     ##### END CHECKER PARAMETERS
 
-
-    def register_user(self, conn, username, password):
+    def register_user(self, conn: SimpleSocket, username: str, password: str):
         conn.write(f"reg {username} {password}\n")
-        self.debug(f"Sent command to register user: {username} with password: {password}")
-        is_ok = conn.read_until('>')
-        if not 'User successfully registered'.encode() in is_ok:
-            raise BrokenServiceException("Failed to register user")
+        self.debug(
+            f"Sent command to register user: {username} with password: {password}"
+        )
+        conn.readline_expect(
+            b"User successfully registered",
+            read_until=b">",
+            exception_message="Failed to register user",
+        )
 
-    def login_user(self, conn, username, password):
+    def login_user(self, conn: SimpleSocket, username: str, password: str):
         conn.write(f"log {username} {password}\n")
         self.debug(f"Sent command to login.")
-        is_ok = conn.read_until('>')
-        if not 'Successfully logged in!'.encode() in is_ok:
-            raise BrokenServiceException("Failed to login")
+        conn.readline_expect(
+            b"Successfully logged in!",
+            read_until=b">",
+            exception_message="Failed to log in",
+        )
 
     def putflag(self):  # type: () -> None
         """
-            This method stores a flag in the service.
-            In case multiple flags are provided, self.variant_id gives the appropriate index.
-            The flag itself can be retrieved from self.flag.
-            On error, raise an Eno Exception.
-            :raises EnoException on error
-            :return this function can return a result if it wants
-                    if nothing is returned, the service status is considered okay.
-                    the preferred way to report errors in the service is by raising an appropriate enoexception
+        This method stores a flag in the service.
+        In case multiple flags are provided, self.variant_id gives the appropriate index.
+        The flag itself can be retrieved from self.flag.
+        On error, raise an Eno Exception.
+        :raises EnoException on error
+        :return this function can return a result if it wants
+                if nothing is returned, the service status is considered okay.
+                the preferred way to report errors in the service is by raising an appropriate enoexception
         """
-        try:
-            if self.variant_id == 0:
-                # Create a TCP connection to the service.
-                conn = self.connect()
-                welcome = conn.read_until(">")
+        if self.variant_id == 0:
+            # Create a TCP connection to the service.
+            conn = self.connect()
+            welcome = conn.read_until(">")
 
-                # First we need to register a user. So let's create some random strings. (Your real checker should use some funny usernames or so)
-                username = ''.join(random.choices(string.ascii_uppercase + string.digits, k=12))
-                password = ''.join(random.choices(string.ascii_uppercase + string.digits, k=12))
+            # First we need to register a user. So let's create some random strings. (Your real checker should use some funny usernames or so)
+            username: str = "".join(
+                random.choices(string.ascii_uppercase + string.digits, k=12)
+            )
+            password: str = "".join(
+                random.choices(string.ascii_uppercase + string.digits, k=12)
+            )
 
-                self.register_user(conn, username, password)
+            self.register_user(conn, username, password)
 
-                # Now we need to login
-                self.login_user(conn, username, password)
+            # Now we need to login
+            self.login_user(conn, username, password)
 
-                # Finally, we can post our note!
-                conn.write(f"set {self.flag}\n")
-                self.debug(f"Sent command to set the flag")
-                is_ok = conn.read_until('>')
-                if not 'Note saved! ID is '.encode() in is_ok:
-                    raise BrokenServiceException("Failed to save note!")
+            # Finally, we can post our note!
+            conn.write(f"set {self.flag}\n")
+            self.debug(f"Sent command to set the flag")
+            conn.read_until(b"Note saved! ID is ")
+            try:
+                noteId = conn.read_until(b"!\n>").rstrip(b"!\n>").decode()
+            except Exception as ex:
+                self.debug(f"Failed to retrieve note: {ex}")
+                raise BrokenServiceException("Could not retrieve NoteId")
 
-                noteId = is_ok.decode().strip().lstrip('Note saved! ID is ').rstrip("!\n>") # This is hacky and should not be done in production-grade checkers.
-                self.debug(f"{noteId}")
+            assert_equals(len(noteId) > 0, True, message="Empty noteId received")
 
-                # Exit!
-                conn.write(f"exit\n")
-                conn.close()
+            self.debug(f"Got noteId {noteId}")
 
+            # Exit!
+            conn.write(f"exit\n")
+            conn.close()
 
-                self.chain_db = {
-                    "username": username,
-                    "password": password,
-                    "noteId": noteId
-                }
-
-        except EOFError:
-            raise OfflineException("Encountered unexpected EOF")
-        except UnicodeError:
-            self.debug("UTF8 Decoding-Error")
-            raise BrokenServiceException("Fucked UTF8")
-
+            self.chain_db = {
+                "username": username,
+                "password": password,
+                "noteId": noteId,
+            }
 
     def getflag(self):  # type: () -> None
         """
@@ -105,39 +111,33 @@ class N0t3b00kChecker(BaseChecker):
                 if nothing is returned, the service status is considered okay.
                 the preferred way to report errors in the service is by raising an appropriate enoexception
         """
-        try:
-            if self.variant_id == 0:
-                # First we check if the previous putflag succeeded!
-                try:
-                    username = self.chain_db["username"]
-                    password = self.chain_db["password"]
-                    noteId = self.chain_db["noteId"]
-                except IndexError:
-                    raise BrokenServiceException("Checked flag was not successfully deployed")
+        if self.variant_id == 0:
+            # First we check if the previous putflag succeeded!
+            try:
+                username: str = self.chain_db["username"]
+                password: str = self.chain_db["password"]
+                noteId: bytes = self.chain_db["noteId"]
+            except IndexError as ex:
+                self.debug(f"error getting notes from db: {ex}")
+                raise EnoException("Failed to read DB")
 
-                conn = self.connect()
-                welcome = conn.read_until(">")
+            conn = self.connect()
+            welcome = conn.read_until(">")
 
-                # Let's login to the service
-                self.login_user(conn, username, password)
+            # Let's login to the service
+            self.login_user(conn, username, password)
 
-                # Let´s obtain our note.
-                conn.write(f"get {noteId}\n")
-                self.debug(f"Sent command to retrieve note: {noteId}")
-                note = conn.read_until(">")
-                if not self.flag.encode() in note:
-                    self.debug(f"Flags do not match: {self.flag.encode()}  vs. {note}")
-                    raise BrokenServiceException("Resulting flag was found to be incorrect")
+            # Let´s obtain our note.
+            conn.write(f"get {noteId}\n")
+            self.debug(f"Sent command to retrieve note: {noteId}")
+            note = conn.read_until(">")
+            assert_in(
+                self.flag.encode(), note, "Resulting flag was found to be incorrect"
+            )
 
-                # Exit!
-                conn.write(f"exit\n")
-                conn.close()
-
-        except EOFError:
-            raise OfflineException("Encountered unexpected EOF")
-        except UnicodeError:
-            self.debug("UTF8 Decoding-Error")
-            raise BrokenServiceException("Fucked UTF8")
+            # Exit!
+            conn.write(f"exit\n")
+            conn.close()
 
     def putnoise(self):  # type: () -> None
         """
@@ -150,47 +150,50 @@ class N0t3b00kChecker(BaseChecker):
                 if nothing is returned, the service status is considered okay.
                 the preferred way to report errors in the service is by raising an appropriate enoexception
         """
-        try:
-            if self.variant_id == 0:
-                conn = self.connect()
-                welcome = conn.read_until(">")
+        if self.variant_id == 0:
+            conn = self.connect()
+            welcome = conn.read_until(">")
 
-                # First we need to register a user. So let's create some random strings. (Your real checker should use some funny usernames or so)
-                username = ''.join(random.choices(string.ascii_uppercase + string.digits, k=12))
-                password = ''.join(random.choices(string.ascii_uppercase + string.digits, k=12))
-                randomNote = ''.join(random.choices(string.ascii_uppercase + string.digits, k=36))
+            # First we need to register a user. So let's create some random strings. (Your real checker should use some funny usernames or so)
+            username = "".join(
+                random.choices(string.ascii_uppercase + string.digits, k=12)
+            )
+            password = "".join(
+                random.choices(string.ascii_uppercase + string.digits, k=12)
+            )
+            randomNote = "".join(
+                random.choices(string.ascii_uppercase + string.digits, k=36)
+            )
 
-                self.register_user(conn, username, password)
+            self.register_user(conn, username, password)
 
-                # Now we need to login
-                self.login_user(conn, username, password)
+            # Now we need to login
+            self.login_user(conn, username, password)
 
-                # Finally, we can post our note!
-                conn.write(f"set {randomNote}\n")
-                self.debug(f"Sent command to set the flag")
-                is_ok = conn.read_until('>')
-                if not 'Note saved! ID is '.encode() in is_ok:
-                    raise BrokenServiceException("Failed to save note!")
+            # Finally, we can post our note!
+            conn.write(f"set {randomNote}\n")
+            self.debug(f"Sent command to set the flag")
+            self.read_until(b"Note saved! ID is ")
+            try:
+                noteId = conn.read_until(b"!\n>").rstrip(b"!\n>").decode()
+            except Exception as ex:
+                self.debug(f"Failed to retrieve note: {ex}")
+                raise BrokenServiceException("Could not retrieve NoteId")
 
-                noteId = is_ok.decode().strip().lstrip('Note saved! ID is ').rstrip("!\n>") # This is hacky and should not be done in production-grade checkers.
-                self.debug(f"{noteId}")
+            assert_equals(len(noteId) > 0, True, message="Empty noteId received")
 
-                # Exit!
-                conn.write(f"exit\n")
-                conn.close()
+            self.debug(f"{noteId}")
 
-                self.chain_db = {
-                    "username": username,
-                    "password": password,
-                    "noteId": noteId,
-                    "note": randomNote
-                }
+            # Exit!
+            conn.write(f"exit\n")
+            conn.close()
 
-        except EOFError:
-            raise OfflineException("Encountered unexpected EOF")
-        except UnicodeError:
-            self.debug("UTF8 Decoding-Error")
-            raise BrokenServiceException("Fucked UTF8")
+            self.chain_db = {
+                "username": username,
+                "password": password,
+                "noteId": noteId,
+                "note": randomNote,
+            }
 
     def getnoise(self):  # type: () -> None
         """
@@ -204,41 +207,33 @@ class N0t3b00kChecker(BaseChecker):
                 if nothing is returned, the service status is considered okay.
                 the preferred way to report errors in the service is by raising an appropriate enoexception
         """
-        try:
-            if self.variant_id == 0:
-                try:
-                    username = self.chain_db["username"]
-                    password = self.chain_db["password"]
-                    noteId = self.chain_db["noteId"]
-                    randomNote = self.chain_db["note"]
-                except IndexError:
-                    raise BrokenServiceException("Checked flag was not successfully deployed")
+        if self.variant_id == 0:
+            try:
+                username: str = self.chain_db["username"]
+                password: str = self.chain_db["password"]
+                noteId: str = self.chain_db["noteId"]
+                randomNote: str = self.chain_db["note"]
+            except Exception as ex:
+                self.debug("Failed to read db {ex}")
+                raise EnoException("Failed to read DB")
 
-                conn = self.connect()
-                welcome = conn.read_until(">")
+            conn = self.connect()
+            welcome = conn.read_until(">")
 
-                # Let's login to the service
-                self.login_user(conn, username, password)
+            # Let's login to the service
+            self.login_user(conn, username, password)
 
-                # Let´s obtain our note.
-                conn.write(f"get {noteId}\n")
-                self.debug(f"Sent command to retrieve note: {noteId}")
-                note = conn.read_until(">")
-                if not randomNote.encode() in note:
-                    self.debug(f"Flags do not match: {randomNote.encode()}  vs. {note}")
-                    raise BrokenServiceException("Resulting flag was found to be incorrect")
+            # Let´s obtain our note.
+            conn.write(f"get {noteId}\n")
+            self.debug(f"Sent command to retrieve note: {noteId}")
+            note = conn.read_until(">")
+            conn.readline_expect(
+                randomNote.encode(), ">", "Resulting flag was found to be incorrect"
+            )
 
-                # Exit!
-                conn.write(f"exit\n")
-                conn.close()
-
-        except EOFError:
-            raise OfflineException("Encountered unexpected EOF")
-        except UnicodeError:
-            self.debug("UTF8 Decoding-Error")
-            raise BrokenServiceException("Fucked UTF8")
-        except KeyError:
-            raise BrokenServiceException("Noise not found!")
+            # Exit!
+            conn.write(f"exit\n")
+            conn.close()
 
     def havoc(self):  # type: () -> None
         """
@@ -249,49 +244,57 @@ class N0t3b00kChecker(BaseChecker):
                 If nothing is returned, the service status is considered okay.
                 The preferred way to report Errors in the service is by raising an appropriate EnoException
         """
-        try:
-            conn = self.connect()
-            welcome = conn.read_until(">")
+        conn = self.connect()
+        welcome = conn.read_until(">")
 
-            if self.variant_id == 0:
-                # In variant 1, we'll check if the help text is available
-                conn.write(f"help\n")
-                self.debug(f"Sent help command")
-                is_ok = conn.read_until('>')
-                for line in ['This is a notebook service. Commands:', 'reg USER PW - Register new account', 'log USER PW - Login to account', 'set TEXT..... - Set a note', 'user  - List all users', 'list - List all notes', 'exit - Exit!', 'dump - Dump the database', 'get ID']:
-                    if not line.encode() in is_ok:
-                        raise BrokenServiceException("Failed to login")
+        if self.variant_id == 0:
+            # In variant 1, we'll check if the help text is available
+            conn.write(f"help\n")
+            self.debug(f"Sent help command")
+            is_ok = conn.read_until(">")
+            # TODO: probably should check if this is in the correct order
+            for line in [
+                "This is a notebook service. Commands:",
+                "reg USER PW - Register new account",
+                "log USER PW - Login to account",
+                "set TEXT..... - Set a note",
+                "user  - List all users",
+                "list - List all notes",
+                "exit - Exit!",
+                "dump - Dump the database",
+                "get ID",
+            ]:
+                assert_in(line.encode(), is_ok, "Received incomplete response.")
 
-            elif self.variant_id == 1:
-                # In variant 2, we'll check if the `user` command still works.
-                username = ''.join(random.choices(string.ascii_uppercase + string.digits, k=12))
-                password = ''.join(random.choices(string.ascii_uppercase + string.digits, k=12))
+        elif self.variant_id == 1:
+            # In variant 2, we'll check if the `user` command still works.
+            username = "".join(
+                random.choices(string.ascii_uppercase + string.digits, k=12)
+            )
+            password = "".join(
+                random.choices(string.ascii_uppercase + string.digits, k=12)
+            )
 
-                self.register_user(conn, username, password)
-                self.login_user(conn, username, password)
+            self.register_user(conn, username, password)
+            self.login_user(conn, username, password)
 
-                conn.write(f"user\n")
-                self.debug(f"Sent user command")
-                is_ok = conn.read_until('>')
-                if not 'User 0: '.encode() in is_ok:
-                    raise BrokenServiceException("User command does not return any users")
+            conn.write(f"user\n")
+            self.debug(f"Sent user command")
+            ret = conn.readline_expect(
+                "User 0: ",
+                read_until=b">",
+                exception_message="User command does not return any users",
+            )
 
-                if username:
-                    if not username.encode() in is_ok:
-                        raise BrokenServiceException("Flag username not in user output")
+            if username:
+                assert_in(username.encode(), ret, "Flag username not in user output")
 
-            else:
-                raise EnoException("Got a unknown variant id")
+        else:
+            raise EnoException("Got a unknown variant id")
 
-            # Exit!
-            conn.write(f"exit\n")
-            conn.close()
-
-        except EOFError:
-            raise OfflineException("Encountered unexpected EOF")
-        except UnicodeError:
-            self.debug("UTF8 Decoding-Error")
-            raise BrokenServiceException("Fucked UTF8")
+        # Exit!
+        conn.write(f"exit\n")
+        conn.close()
 
     def exploit(self):
         """
@@ -302,7 +305,9 @@ class N0t3b00kChecker(BaseChecker):
                 If nothing is returned, the service status is considered okay.
                 The preferred way to report Errors in the service is by raising an appropriate EnoException
         """
+        # TODO: Add your exploit here.
         pass
+
 
 app = N0t3b00kChecker.service  # This can be used for uswgi.
 if __name__ == "__main__":
