@@ -19,24 +19,32 @@ class N0t3b00kChecker(BaseChecker):
     """
 
     ##### EDIT YOUR CHECKER PARAMETERS
-    flag_count = 1
-    noise_count = 1
-    havoc_count = 2
+    flag_variants = 1
+    noise_variants = 1
+    havoc_variants = 2
     service_name = "n0t3b00k"
     port = 2323  # The port will automatically be picked up as default by self.connect and self.http.
     ##### END CHECKER PARAMETERS
 
 
-    def flag_key(self):
-        """
-            This function creates a unique key for our mongo db based on the flag.
-        """
-        return f"flag_{self.flag_round}:{self.flag_idx}"
+    def register_user(self, conn, username, password):
+        conn.write(f"reg {username} {password}\n")
+        self.debug(f"Sent command to register user: {username} with password: {password}")
+        is_ok = conn.read_until('>')
+        if not 'User successfully registered'.encode() in is_ok:
+            raise BrokenServiceException("Failed to register user")
+
+    def login_user(self, conn, username, password):
+        conn.write(f"log {username} {password}\n")
+        self.debug(f"Sent command to login.")
+        is_ok = conn.read_until('>')
+        if not 'Successfully logged in!'.encode() in is_ok:
+            raise BrokenServiceException("Failed to login")
 
     def putflag(self):  # type: () -> None
         """
             This method stores a flag in the service.
-            In case multiple flags are provided, self.flag_idx gives the appropriate index.
+            In case multiple flags are provided, self.variant_id gives the appropriate index.
             The flag itself can be retrieved from self.flag.
             On error, raise an Eno Exception.
             :raises EnoException on error
@@ -45,27 +53,19 @@ class N0t3b00kChecker(BaseChecker):
                     the preferred way to report errors in the service is by raising an appropriate enoexception
         """
         try:
-            if self.flag_idx == 0:
+            if self.variant_id == 0:
                 # Create a TCP connection to the service.
                 conn = self.connect()
+                welcome = conn.read_until(">")
 
                 # First we need to register a user. So let's create some random strings. (Your real checker should use some funny usernames or so)
                 username = ''.join(random.choices(string.ascii_uppercase + string.digits, k=12))
                 password = ''.join(random.choices(string.ascii_uppercase + string.digits, k=12))
 
-                welcome = conn.read_until(">")
-                conn.write(f"reg {username} {password}\n")
-                self.debug(f"Sent command to register user: {username} with password: {password}")
-                is_ok = conn.read_until('>')
-                if not 'User successfully registered'.encode() in is_ok:
-                    raise BrokenServiceException("Failed to register user")
+                self.register_user(conn, username, password)
 
                 # Now we need to login
-                conn.write(f"log {username} {password}\n")
-                self.debug(f"Sent command to login.")
-                is_ok = conn.read_until('>')
-                if not 'Successfully logged in!'.encode() in is_ok:
-                    raise BrokenServiceException("Failed to login")
+                self.login_user(conn, username, password)
 
                 # Finally, we can post our note!
                 conn.write(f"set {self.flag}\n")
@@ -81,9 +81,12 @@ class N0t3b00kChecker(BaseChecker):
                 conn.write(f"exit\n")
                 conn.close()
 
-                self.team_db[self.flag_key() + "username"] = username
-                self.team_db[self.flag_key() + "password"] = password
-                self.team_db[self.flag_key() + "noteId"] = noteId
+
+                self.chain_db = {
+                    "username": username,
+                    "password": password,
+                    "noteId": noteId
+                }
 
         except EOFError:
             raise OfflineException("Encountered unexpected EOF")
@@ -103,24 +106,20 @@ class N0t3b00kChecker(BaseChecker):
                 the preferred way to report errors in the service is by raising an appropriate enoexception
         """
         try:
-            if self.flag_idx == 0:
+            if self.variant_id == 0:
                 # First we check if the previous putflag succeeded!
                 try:
-                    username = self.team_db[self.flag_key() + "username"]
-                    password = self.team_db[self.flag_key() + "password"]
-                    noteId = self.team_db[self.flag_key() + "noteId"]
+                    username = self.chain_db["username"]
+                    password = self.chain_db["password"]
+                    noteId = self.chain_db["noteId"]
                 except IndexError:
                     raise BrokenServiceException("Checked flag was not successfully deployed")
 
                 conn = self.connect()
+                welcome = conn.read_until(">")
 
                 # Let's login to the service
-                welcome = conn.read_until(">")
-                conn.write(f"log {username} {password}\n")
-                self.debug(f"Sent command to login user: {username} with password: {password}")
-                is_ok = conn.read_until('>')
-                if not 'Successfully logged in!'.encode() in is_ok:
-                    raise BrokenServiceException("Failed to login")
+                self.login_user(conn, username, password)
 
                 # Let´s obtain our note.
                 conn.write(f"get {noteId}\n")
@@ -140,17 +139,11 @@ class N0t3b00kChecker(BaseChecker):
             self.debug("UTF8 Decoding-Error")
             raise BrokenServiceException("Fucked UTF8")
 
-    def noise_key(self):
-        """
-            This function creates a unique key for our mongo db based on the flag.
-        """
-        return f"noise_{self.flag_round}:{self.flag_idx}"
-
     def putnoise(self):  # type: () -> None
         """
         This method stores noise in the service. The noise should later be recoverable.
         The difference between noise and flag is, that noise does not have to remain secret for other teams.
-        This method can be called many times per round. Check how often using self.flag_idx.
+        This method can be called many times per round. Check how often using self.variant_id.
         On error, raise an EnoException.
         :raises EnoException on error
         :return this function can return a result if it wants
@@ -158,27 +151,19 @@ class N0t3b00kChecker(BaseChecker):
                 the preferred way to report errors in the service is by raising an appropriate enoexception
         """
         try:
-            if self.flag_idx == 0:
+            if self.variant_id == 0:
                 conn = self.connect()
+                welcome = conn.read_until(">")
 
                 # First we need to register a user. So let's create some random strings. (Your real checker should use some funny usernames or so)
                 username = ''.join(random.choices(string.ascii_uppercase + string.digits, k=12))
                 password = ''.join(random.choices(string.ascii_uppercase + string.digits, k=12))
                 randomNote = ''.join(random.choices(string.ascii_uppercase + string.digits, k=36))
 
-                welcome = conn.read_until(">")
-                conn.write(f"reg {username} {password}\n")
-                self.debug(f"Sent command to register user: {username} with password: {password}")
-                is_ok = conn.read_until('>')
-                if not 'User successfully registered'.encode() in is_ok:
-                    raise BrokenServiceException("Failed to register user")
+                self.register_user(conn, username, password)
 
                 # Now we need to login
-                conn.write(f"log {username} {password}\n")
-                self.debug(f"Sent command to login.")
-                is_ok = conn.read_until('>')
-                if not 'Successfully logged in!'.encode() in is_ok:
-                    raise BrokenServiceException("Failed to login")
+                self.login_user(conn, username, password)
 
                 # Finally, we can post our note!
                 conn.write(f"set {randomNote}\n")
@@ -194,10 +179,12 @@ class N0t3b00kChecker(BaseChecker):
                 conn.write(f"exit\n")
                 conn.close()
 
-                self.team_db[self.noise_key() + "username"] = username
-                self.team_db[self.noise_key() + "password"] = password
-                self.team_db[self.noise_key() + "noteId"] = noteId
-                self.team_db[self.noise_key() + "note"] = randomNote
+                self.chain_db = {
+                    "username": username,
+                    "password": password,
+                    "noteId": noteId,
+                    "note": randomNote
+                }
 
         except EOFError:
             raise OfflineException("Encountered unexpected EOF")
@@ -210,7 +197,7 @@ class N0t3b00kChecker(BaseChecker):
         This method retrieves noise in the service.
         The noise to be retrieved is inside self.flag
         The difference between noise and flag is, that noise does not have to remain secret for other teams.
-        This method can be called many times per round. Check how often using flag_idx.
+        This method can be called many times per round. Check how often using variant_id.
         On error, raise an EnoException.
         :raises EnoException on error
         :return this function can return a result if it wants
@@ -218,24 +205,20 @@ class N0t3b00kChecker(BaseChecker):
                 the preferred way to report errors in the service is by raising an appropriate enoexception
         """
         try:
-            if self.flag_idx == 0:
+            if self.variant_id == 0:
                 try:
-                    username = self.team_db[self.noise_key() + "username"]
-                    password = self.team_db[self.noise_key() + "password"]
-                    noteId = self.team_db[self.noise_key() + "noteId"]
-                    randomNote = self.team_db[self.noise_key() + "note"]
+                    username = self.chain_db["username"]
+                    password = self.chain_db["password"]
+                    noteId = self.chain_db["noteId"]
+                    randomNote = self.chain_db["note"]
                 except IndexError:
                     raise BrokenServiceException("Checked flag was not successfully deployed")
 
                 conn = self.connect()
+                welcome = conn.read_until(">")
 
                 # Let's login to the service
-                welcome = conn.read_until(">")
-                conn.write(f"log {username} {password}\n")
-                self.debug(f"Sent command to login user: {username} with password: {password}")
-                is_ok = conn.read_until('>')
-                if not 'Successfully logged in!'.encode() in is_ok:
-                    raise BrokenServiceException("Failed to login")
+                self.login_user(conn, username, password)
 
                 # Let´s obtain our note.
                 conn.write(f"get {noteId}\n")
@@ -270,7 +253,7 @@ class N0t3b00kChecker(BaseChecker):
             conn = self.connect()
             welcome = conn.read_until(">")
 
-            if self.flag_idx == 0:
+            if self.variant_id == 0:
                 # In variant 1, we'll check if the help text is available
                 conn.write(f"help\n")
                 self.debug(f"Sent help command")
@@ -279,18 +262,13 @@ class N0t3b00kChecker(BaseChecker):
                     if not line.encode() in is_ok:
                         raise BrokenServiceException("Failed to login")
 
-            elif self.flag_idx == 1:
+            elif self.variant_id == 1:
                 # In variant 2, we'll check if the `user` command still works.
-                flag_username = None
-                noise_username = None
-                try:
-                    flag_username = self.team_db[self.flag_key() + "username"]
-                except Exception:
-                    pass
-                try:
-                    noise_username = self.team_db[self.noise_key() + "username"]
-                except Exception:
-                    pass
+                username = ''.join(random.choices(string.ascii_uppercase + string.digits, k=12))
+                password = ''.join(random.choices(string.ascii_uppercase + string.digits, k=12))
+
+                self.register_user(conn, username, password)
+                self.login_user(conn, username, password)
 
                 conn.write(f"user\n")
                 self.debug(f"Sent user command")
@@ -298,11 +276,8 @@ class N0t3b00kChecker(BaseChecker):
                 if not 'User 0: '.encode() in is_ok:
                     raise BrokenServiceException("User command does not return any users")
 
-                if flag_username:
-                    if not flag_username.encode() in is_ok:
-                        raise BrokenServiceException("Flag username not in user output")
-                if noise_username:
-                    if not noise_username.encode() in is_ok:
+                if username:
+                    if not username.encode() in is_ok:
                         raise BrokenServiceException("Flag username not in user output")
 
             else:
@@ -317,8 +292,6 @@ class N0t3b00kChecker(BaseChecker):
         except UnicodeError:
             self.debug("UTF8 Decoding-Error")
             raise BrokenServiceException("Fucked UTF8")
-        except KeyError:
-            raise BrokenServiceException("Noise not found!")
 
     def exploit(self):
         """
