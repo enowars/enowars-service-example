@@ -1,4 +1,4 @@
-enochecker
+enochecker>=0.3.1
 pycryptodome
 gunicorn[eventlet]
 dnspython<2
