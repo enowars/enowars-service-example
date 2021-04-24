@@ -183,7 +183,7 @@ class N0t3b00kChecker(BaseChecker):
                     "username": username,
                     "password": password,
                     "noteId": noteId,
-                    "note": note
+                    "note": randomNote
                 }
 
         except EOFError:
@@ -292,8 +292,6 @@ class N0t3b00kChecker(BaseChecker):
         except UnicodeError:
             self.debug("UTF8 Decoding-Error")
             raise BrokenServiceException("Fucked UTF8")
-        except KeyError:
-            raise BrokenServiceException("Noise not found!")
 
     def exploit(self):
         """
