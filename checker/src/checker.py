@@ -52,6 +52,9 @@ class N0t3b00kChecker(BaseChecker):
                     if nothing is returned, the service status is considered okay.
                     the preferred way to report errors in the service is by raising an appropriate enoexception
         """
+        if not self.variant_id in range(self.flag_variants):
+            raise EnoException("Wrong variant_id provided")
+
         try:
             if self.variant_id == 0:
                 # Create a TCP connection to the service.
@@ -105,6 +108,9 @@ class N0t3b00kChecker(BaseChecker):
                 if nothing is returned, the service status is considered okay.
                 the preferred way to report errors in the service is by raising an appropriate enoexception
         """
+        if not self.variant_id in range(self.flag_variants):
+            raise EnoException("Wrong variant_id provided")
+
         try:
             if self.variant_id == 0:
                 # First we check if the previous putflag succeeded!
@@ -150,6 +156,9 @@ class N0t3b00kChecker(BaseChecker):
                 if nothing is returned, the service status is considered okay.
                 the preferred way to report errors in the service is by raising an appropriate enoexception
         """
+        if not self.variant_id in range(self.noise_variants):
+            raise EnoException("Wrong variant_id provided")
+
         try:
             if self.variant_id == 0:
                 conn = self.connect()
@@ -204,6 +213,9 @@ class N0t3b00kChecker(BaseChecker):
                 if nothing is returned, the service status is considered okay.
                 the preferred way to report errors in the service is by raising an appropriate enoexception
         """
+        if not self.variant_id in range(self.noise_variants):
+            raise EnoException("Wrong variant_id provided")
+
         try:
             if self.variant_id == 0:
                 try:
@@ -249,6 +261,9 @@ class N0t3b00kChecker(BaseChecker):
                 If nothing is returned, the service status is considered okay.
                 The preferred way to report Errors in the service is by raising an appropriate EnoException
         """
+        if not self.variant_id in range(self.havoc_variants):
+            raise EnoException("Wrong variant_id provided")
+
         try:
             conn = self.connect()
             welcome = conn.read_until(">")
