@@ -100,6 +100,8 @@ class N0t3b00kChecker(BaseChecker):
                 "password": password,
                 "noteId": noteId,
             }
+        else:
+            raise EnoException("Wrong variant_id provided")
 
     def getflag(self):  # type: () -> None
         """
@@ -138,6 +140,9 @@ class N0t3b00kChecker(BaseChecker):
             # Exit!
             conn.write(f"exit\n")
             conn.close()
+        else:
+            raise EnoException("Wrong variant_id provided")
+
 
     def putnoise(self):  # type: () -> None
         """
@@ -194,6 +199,8 @@ class N0t3b00kChecker(BaseChecker):
                 "noteId": noteId,
                 "note": randomNote,
             }
+        else:
+            raise EnoException("Wrong variant_id provided")
 
     def getnoise(self):  # type: () -> None
         """
@@ -234,6 +241,8 @@ class N0t3b00kChecker(BaseChecker):
             # Exit!
             conn.write(f"exit\n")
             conn.close()
+        else:
+            raise EnoException("Wrong variant_id provided")
 
     def havoc(self):  # type: () -> None
         """
@@ -290,7 +299,7 @@ class N0t3b00kChecker(BaseChecker):
                 assert_in(username.encode(), ret, "Flag username not in user output")
 
         else:
-            raise EnoException("Got a unknown variant id")
+            raise EnoException("Wrong variant_id provided")
 
         # Exit!
         conn.write(f"exit\n")
