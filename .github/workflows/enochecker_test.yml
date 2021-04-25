@@ -13,6 +13,9 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      ENOCHECKER_TEST_CHECKER_ADDRESS: localhost
+      ENOCHECKER_TEST_CHECKER_PORT: 8000
 
     steps:
     - uses: actions/checkout@v2
@@ -41,7 +44,4 @@ jobs:
     - name: run enochecker_test
       run: |
         enochecker_test
-      env:
-        ENOCHECKER_TEST_CHECKER_ADDRESS: localhost
-        ENOCHECKER_TEST_CHECKER_PORT: 8000
 
