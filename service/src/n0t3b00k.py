@@ -197,6 +197,8 @@ get ID\n""".encode())
         client.close()
 
 if __name__ == "__main__":
+    print("n0t3b00k starting!")
     service = ThreadedServer('',8000).listen()
-
+    print("ThreadedServer listening...")
     service.join()
+    print("n0t3b00k exiting.")
