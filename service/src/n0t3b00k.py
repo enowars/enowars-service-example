@@ -128,7 +128,7 @@ get ID\n""".encode())
                     reg_user = split[0]
                     reg_pw = split[1]
                     self.users[reg_user] = reg_pw
-                    if not reg_user in self.userNotes.keys() or self.userNotes[reg_user] is None:
+                    if not self.userNotes.has_key(reg_user):
                         self.userNotes[reg_user] = []
                     client.send("User successfully registered\n".encode())
                     continue
