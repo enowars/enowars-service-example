@@ -40,5 +40,5 @@ jobs:
         enochecker_test
       env:
         ENOCHECKER_TEST_CHECKER_ADDRESS: localhost
-        ENOCHECKER_TEST_CHECKER_PORT: 8198 
+        ENOCHECKER_TEST_CHECKER_PORT: 8000
 
