@@ -4,6 +4,16 @@ import hashlib
 import os
 import json
 
+#### Service tenets
+# A service SHOULD NOT be a simple wrapper for a key-value database, and SHOULD expose more complex functionality => This is an example service, so it does not satisfy this tenet.
+# Rewriting a service with the same feature set SHOULD NOT be feasible within the timeframe of the contest => Same as above
+# A service MAY be written in unexpected languages or using fun frameworks => Same as above
+# A service MUST have at least one complex vulnerability => Hm, maybe the path traversal qualifies
+# Vulnerabilities SHOULD NOT be easily replayable => This is an example service.
+# A service SHOULD NOT have unintended vulnerabilities => Hm, maybe reading flags or files?
+####
+
+
 # This is a quick & dirty class to persist our notes to the filesystem instead of memory.
 class FilesystemDict(dict):
     def __init__(self, folder, *args, **kwargs):
