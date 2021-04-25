@@ -31,8 +31,6 @@ jobs:
       run: |
         cd service
         docker-compose up -d
-        docker ps
-        docker-compose logs
     - name: start checker
       run: |
         cd checker
