@@ -23,7 +23,7 @@ class N0t3b00kChecker(BaseChecker):
     ##### EDIT YOUR CHECKER PARAMETERS
     flag_variants = 1
     noise_variants = 1
-    havoc_variants = 2
+    havoc_variants = 3
     service_name = "n0t3b00k"
     port = 2323  # The port will automatically be picked up as default by self.connect and self.http.
     ##### END CHECKER PARAMETERS
@@ -97,6 +97,7 @@ class N0t3b00kChecker(BaseChecker):
             self.debug(f"Got noteId {noteId}")
 
             # Exit!
+            self.debug(f"Sending exit command")
             conn.write(f"exit\n")
             conn.close()
 
@@ -147,6 +148,7 @@ class N0t3b00kChecker(BaseChecker):
             )
 
             # Exit!
+            self.debug(f"Sending exit command")
             conn.write(f"exit\n")
             conn.close()
         else:
@@ -169,7 +171,7 @@ class N0t3b00kChecker(BaseChecker):
             conn = self.connect()
             welcome = conn.read_until(">")
 
-            # First we need to register a user. So let's create some random strings. (Your real checker should use some funny usernames or so)
+            # First we need to register a user. So let's create some random strings. (Your real checker should use some better usernames or so [i.e., use the "faker¨ lib])
             username = "".join(
                 random.choices(string.ascii_uppercase + string.digits, k=12)
             )
@@ -187,7 +189,7 @@ class N0t3b00kChecker(BaseChecker):
             self.login_user(conn, username, password)
 
             # Finally, we can post our note!
-            self.debug(f"Sending command to set the flag")
+            self.debug(f"Sending command to save a note")
             conn.write(f"set {randomNote}\n")
             conn.read_until(b"Note saved! ID is ")
 
@@ -202,6 +204,7 @@ class N0t3b00kChecker(BaseChecker):
             self.debug(f"{noteId}")
 
             # Exit!
+            self.debug(f"Sending exit command")
             conn.write(f"exit\n")
             conn.close()
 
@@ -253,6 +256,7 @@ class N0t3b00kChecker(BaseChecker):
             )
 
             # Exit!
+            self.debug(f"Sending exit command")
             conn.write(f"exit\n")
             conn.close()
         else:
@@ -314,10 +318,49 @@ class N0t3b00kChecker(BaseChecker):
             if username:
                 assert_in(username.encode(), ret, "Flag username not in user output")
 
+        elif self.variant_id == 2:
+            # In variant 2, we'll check if the `list` command still works.
+            username = "".join(
+                random.choices(string.ascii_uppercase + string.digits, k=12)
+            )
+            password = "".join(
+                random.choices(string.ascii_uppercase + string.digits, k=12)
+            )
+            randomNote = "".join(
+                random.choices(string.ascii_uppercase + string.digits, k=36)
+            )
+
+            # Register and login a dummy user
+            self.register_user(conn, username, password)
+            self.login_user(conn, username, password)
+
+            self.debug(f"Sending command to save a note")
+            conn.write(f"set {randomNote}\n")
+            conn.read_until(b"Note saved! ID is ")
+
+            try:
+                noteId = conn.read_until(b"!\n>").rstrip(b"!\n>").decode()
+            except Exception as ex:
+                self.debug(f"Failed to retrieve note: {ex}")
+                raise BrokenServiceException("Could not retrieve NoteId")
+
+            assert_equals(len(noteId) > 0, True, message="Empty noteId received")
+
+            self.debug(f"{noteId}")
+
+            self.debug(f"Sending list command")
+            conn.write(f"list\n")
+            conn.readline_expect(
+                noteId.encode(),
+                read_until=b'>',
+                exception_message="List command does not work as intended"
+            )
+
         else:
             raise EnoException("Wrong variant_id provided")
 
         # Exit!
+        self.debug(f"Sending exit command")
         conn.write(f"exit\n")
         conn.close()
 
