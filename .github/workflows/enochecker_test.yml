@@ -1,0 +1,44 @@
+name: enochecker_test
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  schedule:
+    - cron: "0 0 * * 1"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v2
+    - name: Set up Python 3.9
+      uses: actions/setup-python@v2
+      with:
+        python-version: 3.9
+    - name: Install enochecker_test
+      run: |
+        python -m pip install --upgrade pip
+        pip install enochecker-test
+    - name: start service
+      run: |
+        cd service
+        docker-compose up -d
+    - name: start checker
+      run: |
+        cd checker
+        docker-compose up -d
+    - name: obtain Docker host IP
+      run: |
+        echo "ENOCHECKER_TEST_SERVICE_ADDRESS=$(ip -4 address show dev eth0 | grep inet | awk '{ print $2 }' | sed 's|/.*$||')" >> $GITHUB_ENV
+    - name: run enochecker_test
+      run: |
+        enochecker_test
+      env:
+        ENOCHECKER_TEST_CHECKER_ADDRESS: localhost
+        ENOCHECKER_TEST_CHECKER_PORT: 8198 
+
