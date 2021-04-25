@@ -2,7 +2,7 @@ version: '3'
 services:
   n0t3b00k:
     build: .
-    # We want to mount the code read-only, so that RCE or arbitrary write exploits can't break the service.
+    # The code should be copied into the container using COPY.
     # Mount the data folder writable, so that information can be persisted across restarts.
     volumes:
       - ./data/:/data:rw

@@ -4,6 +4,7 @@ import hashlib
 import os
 import json
 
+# This is a quick & dirty class to persist our notes to the filesystem instead of memory.
 class FilesystemDict(dict):
     def __init__(self, folder, *args, **kwargs):
         self.folder = folder
