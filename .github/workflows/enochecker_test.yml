@@ -41,6 +41,9 @@ jobs:
     - name: wait for checker to become available
       run: |
         timeout 10 sh -c "while ! curl -q ${ENOCHECKER_TEST_CHECKER_ADDRESS}:${ENOCHECKER_TEST_CHECKER_PORT}; do sleep 0.1; done"
+    - run: |
+        docker ps
+        sudo lsof -i -P -n | grep LISTEN
     - name: run enochecker_test
       run: |
         enochecker_test
