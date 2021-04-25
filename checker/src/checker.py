@@ -14,8 +14,8 @@ class N0t3b00kChecker(BaseChecker):
     As well as methods:
     self.connect() connects to the remote server.
     self.get and self.post request from http.
-    self.team_db is a dict that stores its contents to filesystem. (call .persist() to make sure)
-    self.readline_expect(): fails if it's not read correctly
+    self.chain_db is a dict that stores its contents to a mongodb or filesystem.
+    conn.readline_expect(): fails if it's not read correctly
     To read the whole docu and find more goodies, run python -m pydoc enochecker
     (Or read the source, Luke)
     """
@@ -29,10 +29,10 @@ class N0t3b00kChecker(BaseChecker):
     ##### END CHECKER PARAMETERS
 
     def register_user(self, conn: SimpleSocket, username: str, password: str):
-        conn.write(f"reg {username} {password}\n")
         self.debug(
-            f"Sent command to register user: {username} with password: {password}"
+            f"Sending command to register user: {username} with password: {password}"
         )
+        conn.write(f"reg {username} {password}\n")
         conn.readline_expect(
             b"User successfully registered",
             read_until=b">",
@@ -40,8 +40,8 @@ class N0t3b00kChecker(BaseChecker):
         )
 
     def login_user(self, conn: SimpleSocket, username: str, password: str):
+        self.debug(f"Sending command to login.")
         conn.write(f"log {username} {password}\n")
-        self.debug(f"Sent command to login.")
         conn.readline_expect(
             b"Successfully logged in!",
             read_until=b">",
@@ -60,10 +60,6 @@ class N0t3b00kChecker(BaseChecker):
                 the preferred way to report errors in the service is by raising an appropriate enoexception
         """
         if self.variant_id == 0:
-            # Create a TCP connection to the service.
-            conn = self.connect()
-            welcome = conn.read_until(">")
-
             # First we need to register a user. So let's create some random strings. (Your real checker should use some funny usernames or so)
             username: str = "".join(
                 random.choices(string.ascii_uppercase + string.digits, k=12)
@@ -72,16 +68,25 @@ class N0t3b00kChecker(BaseChecker):
                 random.choices(string.ascii_uppercase + string.digits, k=12)
             )
 
+            # Log a message before any critical action that could raise an error.
+            self.debug(f"Connecting to service")
+            # Create a TCP connection to the service.
+            conn = self.connect()
+            welcome = conn.read_until(">")
+
+            # Register a new user
             self.register_user(conn, username, password)
 
             # Now we need to login
             self.login_user(conn, username, password)
 
             # Finally, we can post our note!
+            self.debug(f"Sending command to set the flag")
             conn.write(f"set {self.flag}\n")
-            self.debug(f"Sent command to set the flag")
             conn.read_until(b"Note saved! ID is ")
+
             try:
+                # Try to retrieve the resulting noteId. Using rstrip() is hacky, you should probably want to use regular expressions or something more robust.
                 noteId = conn.read_until(b"!\n>").rstrip(b"!\n>").decode()
             except Exception as ex:
                 self.debug(f"Failed to retrieve note: {ex}")
@@ -95,11 +100,14 @@ class N0t3b00kChecker(BaseChecker):
             conn.write(f"exit\n")
             conn.close()
 
+            # Save the generated values for the associated getflag() call.
+            # This is not a real dictionary! You cannot update it (i.e., self.chain_db["foo"] = bar) and some types are converted (i.e., bool -> str.). See: https://github.com/enowars/enochecker/issues/27
             self.chain_db = {
                 "username": username,
                 "password": password,
                 "noteId": noteId,
             }
+
         else:
             raise EnoException("Wrong variant_id provided")
 
@@ -118,11 +126,12 @@ class N0t3b00kChecker(BaseChecker):
             try:
                 username: str = self.chain_db["username"]
                 password: str = self.chain_db["password"]
-                noteId: bytes = self.chain_db["noteId"]
+                noteId: str = self.chain_db["noteId"]
             except IndexError as ex:
                 self.debug(f"error getting notes from db: {ex}")
-                raise EnoException("Failed to read DB")
+                raise BrokenServiceException("Previous putflag failed.")
 
+            self.debug(f"Connecting to the service")
             conn = self.connect()
             welcome = conn.read_until(">")
 
@@ -130,8 +139,8 @@ class N0t3b00kChecker(BaseChecker):
             self.login_user(conn, username, password)
 
             # Let´s obtain our note.
+            self.debug(f"Sending command to retrieve note: {noteId}")
             conn.write(f"get {noteId}\n")
-            self.debug(f"Sent command to retrieve note: {noteId}")
             note = conn.read_until(">")
             assert_in(
                 self.flag.encode(), note, "Resulting flag was found to be incorrect"
@@ -156,6 +165,7 @@ class N0t3b00kChecker(BaseChecker):
                 the preferred way to report errors in the service is by raising an appropriate enoexception
         """
         if self.variant_id == 0:
+            self.debug(f"Connecting to the service")
             conn = self.connect()
             welcome = conn.read_until(">")
 
@@ -170,15 +180,17 @@ class N0t3b00kChecker(BaseChecker):
                 random.choices(string.ascii_uppercase + string.digits, k=36)
             )
 
+            # Register another user
             self.register_user(conn, username, password)
 
             # Now we need to login
             self.login_user(conn, username, password)
 
             # Finally, we can post our note!
+            self.debug(f"Sending command to set the flag")
             conn.write(f"set {randomNote}\n")
-            self.debug(f"Sent command to set the flag")
-            self.read_until(b"Note saved! ID is ")
+            conn.read_until(b"Note saved! ID is ")
+
             try:
                 noteId = conn.read_until(b"!\n>").rstrip(b"!\n>").decode()
             except Exception as ex:
@@ -222,8 +234,9 @@ class N0t3b00kChecker(BaseChecker):
                 randomNote: str = self.chain_db["note"]
             except Exception as ex:
                 self.debug("Failed to read db {ex}")
-                raise EnoException("Failed to read DB")
+                raise BrokenServiceException("Previous putnoise failed.")
 
+            self.debug(f"Connecting to service")
             conn = self.connect()
             welcome = conn.read_until(">")
 
@@ -231,11 +244,12 @@ class N0t3b00kChecker(BaseChecker):
             self.login_user(conn, username, password)
 
             # Let´s obtain our note.
+            self.debug(f"Sending command to retrieve note: {noteId}")
             conn.write(f"get {noteId}\n")
-            self.debug(f"Sent command to retrieve note: {noteId}")
-            note = conn.read_until(">")
             conn.readline_expect(
-                randomNote.encode(), ">", "Resulting flag was found to be incorrect"
+                randomNote.encode(),
+                read_until=b">",
+                exception_message="Resulting flag was found to be incorrect"
             )
 
             # Exit!
@@ -253,15 +267,16 @@ class N0t3b00kChecker(BaseChecker):
                 If nothing is returned, the service status is considered okay.
                 The preferred way to report Errors in the service is by raising an appropriate EnoException
         """
+        self.debug(f"Connecting to service")
         conn = self.connect()
         welcome = conn.read_until(">")
 
         if self.variant_id == 0:
             # In variant 1, we'll check if the help text is available
+            self.debug(f"Sending help command")
             conn.write(f"help\n")
-            self.debug(f"Sent help command")
             is_ok = conn.read_until(">")
-            # TODO: probably should check if this is in the correct order
+
             for line in [
                 "This is a notebook service. Commands:",
                 "reg USER PW - Register new account",
@@ -284,11 +299,12 @@ class N0t3b00kChecker(BaseChecker):
                 random.choices(string.ascii_uppercase + string.digits, k=12)
             )
 
+            # Register and login a dummy user
             self.register_user(conn, username, password)
             self.login_user(conn, username, password)
 
+            self.debug(f"Sending user command")
             conn.write(f"user\n")
-            self.debug(f"Sent user command")
             ret = conn.readline_expect(
                 "User 0: ",
                 read_until=b">",
@@ -314,7 +330,7 @@ class N0t3b00kChecker(BaseChecker):
                 If nothing is returned, the service status is considered okay.
                 The preferred way to report Errors in the service is by raising an appropriate EnoException
         """
-        # TODO: Add your exploit here.
+        # TODO: We still haven't decided if we want to use this function or not. TBA
         pass
 
 
