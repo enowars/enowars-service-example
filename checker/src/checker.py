@@ -4,6 +4,11 @@ from enochecker.utils import SimpleSocket, assert_equals, assert_in
 import random
 import string
 
+#### Checker Tenets
+# A checker SHOULD not be easily identified by the examination of network traffic => This one is not satisfied, because our usernames and notes are simple too random and easily identifiable.
+# A checker SHOULD use unusual, incorrect or pseudomalicious input to detect network filters => This tenet is not satisfied, because we do not send common attack strings (i.e. for SQL injection, RCE, etc.) in our notes or usernames.
+####
+
 
 class N0t3b00kChecker(BaseChecker):
     """
