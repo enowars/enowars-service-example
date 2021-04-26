@@ -2,8 +2,6 @@ FROM python:3.7
 
 # Create user
 RUN useradd -ms /bin/bash -u 1000 checker
-RUN mkdir /checker /data
-RUN chown checker:checker /checker /data
 
 USER checker
 WORKDIR /checker
