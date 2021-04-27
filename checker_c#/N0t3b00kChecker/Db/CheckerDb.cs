@@ -29,7 +29,7 @@ namespace N0t3b00kChecker.Db
 
         public static string MongoHost => Environment.GetEnvironmentVariable("MONGO_HOST") ?? "localhost";
 
-        public static string MongoPort => Environment.GetEnvironmentVariable("MONGO_PORT") ?? "localhost";
+        public static string MongoPort => Environment.GetEnvironmentVariable("MONGO_PORT") ?? "27017";
 
         public static string MongoConnection => $"mongodb://{MongoHost}:{MongoPort}";
 
