@@ -62,7 +62,7 @@ You will use CI/CD to continuously check the checker and service.
 - Run `enochecker_test`:
 
 ```
-ENOCHECKER_TEST_CHECKER_ADDRESS='localhost' ENOCHECKER_TEST_CHECKER_PORT='8000' ENOCHECKER_TEST_SERVICE_ADDRESS='192.168.2.112' ENOCHECKER_TEST_SERVICE_PORT='2323' enochecker_test
+ENOCHECKER_TEST_CHECKER_ADDRESS='localhost' ENOCHECKER_TEST_CHECKER_PORT='8000' ENOCHECKER_TEST_SERVICE_ADDRESS='192.168.2.112' enochecker_test
 ```
 
 # Questions?
