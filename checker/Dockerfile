@@ -1,4 +1,4 @@
-FROM python:3.7
+FROM python:3.9
 
 # Create user
 RUN useradd -ms /bin/bash -u 1000 checker
