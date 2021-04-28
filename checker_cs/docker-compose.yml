@@ -7,6 +7,6 @@ services:
       - MONGO_PORT=27017
       #- USE_ELK=true
     ports:
-      - "127.0.0.1:8000:80"
+      - "8000:80"
   mongodb:
     image: mongo
