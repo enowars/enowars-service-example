@@ -38,12 +38,6 @@ jobs:
     - name: obtain Docker host IP
       run: |
         echo "ENOCHECKER_TEST_SERVICE_ADDRESS=$(ip -4 address show dev eth0 | grep inet | awk '{ print $2 }' | sed 's|/.*$||')" >> $GITHUB_ENV
-    - name: wait for checker to become available
-      run: |
-        timeout 10 sh -c "while ! curl -q ${ENOCHECKER_TEST_CHECKER_ADDRESS}:${ENOCHECKER_TEST_CHECKER_PORT}; do sleep 0.1; done"
-    - run: |
-        docker ps
-        sudo lsof -i -P -n | grep LISTEN
     - name: run enochecker_test
       run: |
         enochecker_test

@@ -17,7 +17,7 @@ namespace N0t3b00kChecker
 
         public int HavocVariants => 3;
 
-        public string ServiceName => "N0t3b00k";
+        public string ServiceName => "n0t3b00k";
 
         public void Initialize(IServiceCollection collection)
         {
