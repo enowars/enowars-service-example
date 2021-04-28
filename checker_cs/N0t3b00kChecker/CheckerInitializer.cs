@@ -11,11 +11,11 @@ namespace N0t3b00kChecker
 {
     public class CheckerInitializer : ICheckerInitializer
     {
-        public int FlagsPerRound => 1;
+        public int FlagVariants => 1;
 
-        public int NoisesPerRound => 1;
+        public int NoiseVariants => 1;
 
-        public int HavocsPerRound => 3;
+        public int HavocVariants => 3;
 
         public string ServiceName => "N0t3b00k";
 
