@@ -1,4 +1,5 @@
 ﻿using EnoCore.Checker;
+using EnoCore.CheckerUtil;
 using EnoCore.Models;
 using Microsoft.Extensions.Logging;
 using N0t3b00kChecker.Db;
@@ -15,11 +16,10 @@ namespace N0t3b00kChecker
 {
     class NotebookClient : IDisposable
     {
+        private static readonly string welcomeMessage = "Welcome to the 1337 n0t3b00k!";
         private readonly ILogger<NotebookClient> logger;
         private NotebookUser? user;
-        private TcpClient? tcpClient;
-        private StreamReader? reader;
-        private StreamWriter? writer;
+        private EnoCheckerTcpConnection? tcpConnection;
 
         public NotebookClient(ILogger<NotebookClient> logger)
         {
@@ -29,39 +29,13 @@ namespace N0t3b00kChecker
         public async Task Connect(CheckerTaskMessage task, CancellationToken token)
         {
             this.logger.LogInformation("Connecting to service");
-            this.tcpClient = new();
-            try
-            {
-                await this.tcpClient.ConnectAsync(task.Address, Checker.SERVICE_PORT, token);
-                this.reader = new StreamReader(this.tcpClient.GetStream());
-                this.writer = new StreamWriter(this.tcpClient.GetStream());
-                token.Register(() =>
-                {
-                    tcpClient.Close();
-                    reader.Close();
-                    writer.Close();
-                });
-            }
-            catch (Exception e)
-            {
-                this.logger.LogWarning($"Connect failed: {e.Message}\n{e.StackTrace}");
-                throw new OfflineException("Failed to establish TCP connection");
-            }
+            this.tcpConnection = await EnoCheckerTcpConnection.Connect(task.Address, Checker.SERVICE_PORT, this.logger, token);
 
-            string? response;
-            try
-            {
-                this.logger.LogDebug("Wait for welcome message");
-                response = await this.reader!.ReadLineAsync();
-                await reader!.ReadAsync(new char[2].AsMemory(), token);
-            }
-            catch (Exception e)
-            {
-                this.logger.LogWarning($"Received no welcome message: {e.Message}\n{e.StackTrace}");
-                throw new OfflineException("No welcome message received");
-            }
+            this.logger.LogDebug("Wait for welcome message");
+            var response = await this.tcpConnection.ReceiveUntilAsync(Encoding.ASCII.GetBytes("\n> "), logger, token, errorMessage: "No welcome message received");
+            string responseString = Encoding.ASCII.GetString(response);
 
-            if (response != "Welcome to the 1337 n0t3b00k!")
+            if (responseString != welcomeMessage)
             {
                 this.logger.LogWarning($"Received no welcome message: {response}");
                 throw new MumbleException("No welcome message received");
@@ -72,30 +46,11 @@ namespace N0t3b00kChecker
         {
             this.logger.LogInformation($"Registering user {user.Username}");
             this.user = user;
-            try
-            {
-                this.logger.LogDebug($"reg {this.user.Username} {this.user.Password}");
-                await this.writer!.WriteAsync($"reg {this.user.Username} {this.user.Password}\n".AsMemory(), token);
-                await this.writer.FlushAsync();
-            }
-            catch (Exception e)
-            {
-                this.logger.LogWarning($"Register failed: {e.Message}\n{e.StackTrace}");
-                throw new OfflineException("Connection error during registration");
-            }
+            this.logger.LogDebug($"reg {this.user.Username} {this.user.Password}");
+            await this.tcpConnection!.SendAsync(Encoding.ASCII.GetBytes($"reg {this.user.Username} {this.user.Password}\n"), logger, token, errorMessage: "Connection error during registration");
 
-            string? response;
-            try
-            {
-                this.logger.LogDebug("Wait for register success message");
-                response = await this.reader!.ReadLineAsync();
-                await reader!.ReadAsync(new char[2].AsMemory(), token);
-            }
-            catch (Exception e)
-            {
-                this.logger.LogWarning($"Registration failed: {e.Message}\n{e.StackTrace}");
-                throw new OfflineException("Connection error during registration");
-            }
+            var responseBytes = await this.tcpConnection.ReceiveUntilAsync(Encoding.ASCII.GetBytes("\n> "), logger, token, errorMessage: "Connection error during registration");
+            string response = Encoding.ASCII.GetString(responseBytes);
 
             if (response != "User successfully registered")
             {
@@ -107,29 +62,12 @@ namespace N0t3b00kChecker
         public async Task Login(NotebookUser user, CancellationToken token)
         {
             this.user = user;
-            try
-            {
-                this.logger.LogDebug($"log {this.user.Username} {this.user.Password}");
-                await this.writer!.WriteAsync($"log {this.user.Username} {this.user.Password}\n".AsMemory(), token);
-                await this.writer.FlushAsync();
-            }
-            catch (Exception e)
-            {
-                this.logger.LogWarning($"Login failed: {e.Message}\n{e.StackTrace}");
-                throw new OfflineException("Connection error during login");
-            }
 
-            string? response;
-            try
-            {
-                response = await this.reader!.ReadLineAsync();
-                await reader!.ReadAsync(new char[2].AsMemory(), token);
-            }
-            catch (Exception e)
-            {
-                this.logger.LogWarning($"Login failed: {e.Message}\n{e.StackTrace}");
-                throw new OfflineException("Connection error during login");
-            }
+            this.logger.LogDebug($"log {this.user.Username} {this.user.Password}");
+            await this.tcpConnection!.SendAsync(Encoding.ASCII.GetBytes($"log {this.user.Username} {this.user.Password}\n"), this.logger, token, errorMessage: "Connection error during login");
+
+            var responseBytes = await this.tcpConnection.ReceiveUntilAsync(Encoding.ASCII.GetBytes("\n> "), logger, token, errorMessage: "Connection error during login");
+            string response = Encoding.ASCII.GetString(responseBytes);
 
             if (response != "Successfully logged in!")
             {
@@ -140,28 +78,11 @@ namespace N0t3b00kChecker
 
         public async Task<string> SetNote(string note, CancellationToken token)
         {
-            try
-            {
-                this.logger.LogDebug($"set {note}");
-                await this.writer!.WriteAsync($"set {note}\n".AsMemory(), token);
-                await this.writer.FlushAsync();
-            }
-            catch (Exception e)
-            {
-                this.logger.LogWarning($"Set note failed: {e.Message}\n{e.StackTrace}");
-                throw new OfflineException("Connection error during set note");
-            }
+            this.logger.LogDebug($"set {note}");
+            await this.tcpConnection!.SendAsync(Encoding.ASCII.GetBytes($"set {note}\n"), this.logger, token, errorMessage: "Connection error during set note");
 
-            string? response;
-            try
-            {
-                response = await this.reader!.ReadLineAsync();
-            }
-            catch (Exception e)
-            {
-                this.logger.LogWarning($"Set note failed: {e.Message}\n{e.StackTrace}");
-                throw new OfflineException("Connection error during set note");
-            }
+            var responseBytes = await this.tcpConnection.ReceiveUntilAsync(Encoding.ASCII.GetBytes("\n> "), logger, token, errorMessage: "Connection error during set note");
+            string response = Encoding.ASCII.GetString(responseBytes);
 
             try
             {
@@ -177,29 +98,11 @@ namespace N0t3b00kChecker
 
         public async Task<string> GetNote(string noteId, CancellationToken token)
         {
-            try
-            {
-                this.logger.LogDebug($"get {noteId}");
-                await this.writer!.WriteAsync($"get {noteId}\n".AsMemory(), token);
-                await this.writer.FlushAsync();
-            }
-            catch (Exception e)
-            {
-                this.logger.LogWarning($"Get note failed: {e.Message}\n{e.StackTrace}");
-                throw new OfflineException("Connection error during get note");
-            }
+            this.logger.LogDebug($"get {noteId}");
+            await this.tcpConnection!.SendAsync(Encoding.ASCII.GetBytes($"get {noteId}\n"), this.logger, token, errorMessage: "Connection error during get note");
 
-            string? response;
-            try
-            {
-                response = await this.reader!.ReadLineAsync();
-                await reader!.ReadAsync(new char[2].AsMemory(), token);
-            }
-            catch (Exception e)
-            {
-                this.logger.LogWarning($"Get note failed: {e.Message}\n{e.StackTrace}");
-                throw new OfflineException("Connection error during set note");
-            }
+            var responseBytes = await this.tcpConnection.ReceiveUntilAsync(Encoding.ASCII.GetBytes("\n> "), logger, token, errorMessage: "Connection error during set note");
+            string response = Encoding.ASCII.GetString(responseBytes);
 
             if (response == null)
             {
@@ -211,89 +114,49 @@ namespace N0t3b00kChecker
 
         public async Task<string> GetHelp(CancellationToken token)
         {
-            try
-            {
-                this.logger.LogDebug($"help");
-                await this.writer!.WriteAsync($"help\n".AsMemory(), token);
-                await this.writer.FlushAsync();
-            }
-            catch (Exception e)
-            {
-                this.logger.LogWarning($"Get help failed: {e.Message}\n{e.StackTrace}");
-                throw new OfflineException("Connection error during help");
-            }
+            this.logger.LogDebug($"GetHelp");
+            await this.tcpConnection!.SendAsync(Encoding.ASCII.GetBytes($"help\n"), this.logger, token, errorMessage: "Connection error during help");
 
-            var sb = new StringBuilder();
-            try
-            {
-                for (var i = 0; i < 10; i++)
-                {
-                    sb.AppendLine(await this.reader!.ReadLineAsync());
-                }
-            }
-            catch (Exception e)
-            {
-                this.logger.LogWarning($"Get note failed: {e.Message}\n{e.StackTrace}");
-                throw new OfflineException("Connection error during set note");
-            }
-            return sb.ToString();
+            var responseBytes = await this.tcpConnection.ReceiveUntilAsync(Encoding.ASCII.GetBytes("\n> "), logger, token, errorMessage: "Connection error during set note");
+            return Encoding.ASCII.GetString(responseBytes);
         }
 
-        public async Task WaitForUserInList(string username, CancellationToken token)
+        public async Task<List<string>> GetUsers(CancellationToken token)
         {
-            try
-            {
-                this.logger.LogDebug($"GetList");
-                await this.writer!.WriteAsync($"user\n".AsMemory(), token);
-                await this.writer.FlushAsync();
-            }
-            catch (Exception e)
-            {
-                this.logger.LogWarning($"Get help failed: {e.Message}\n{e.StackTrace}");
-                throw new OfflineException("Connection error during help");
-            }
+            this.logger.LogDebug($"GetUsers");
+            await this.tcpConnection!.SendAsync(Encoding.ASCII.GetBytes($"user\n"), this.logger, token, errorMessage: "Connection error during help");
 
+            var responseBytes = await this.tcpConnection.ReceiveUntilAsync(Encoding.ASCII.GetBytes("\n> "), logger, token, errorMessage: "Connection error during set note");
+            var response = Encoding.ASCII.GetString(responseBytes);
+            var users = new List<string>();
             try
             {
-                while (true)
+                foreach (var userEntry in response.Split('\n'))
                 {
-                    var line = await this.reader!.ReadLineAsync();
-                    if (line != null && line.EndsWith(username))
-                    {
-                        return;
-                    }
+                    users.Add(userEntry.Split(": ")[1]);
                 }
             }
             catch (Exception e)
             {
                 this.logger.LogWarning($"Get note failed: {e.Message}\n{e.StackTrace}");
-                throw new OfflineException("Connection error during set note");
+                throw new MumbleException("Invalid user list");
             }
+            return users;
         }
 
-        public async Task WaitForNoteInList(string noteId, CancellationToken token)
+        public async Task<List<string>> GetNotes(CancellationToken token)
         {
-            try
-            {
-                this.logger.LogDebug($"GetList");
-                await this.writer!.WriteAsync($"list\n".AsMemory(), token);
-                await this.writer.FlushAsync();
-            }
-            catch (Exception e)
-            {
-                this.logger.LogWarning($"Get help failed: {e.Message}\n{e.StackTrace}");
-                throw new OfflineException("Connection error during help");
-            }
+            this.logger.LogDebug($"GetList");
+            await this.tcpConnection!.SendAsync(Encoding.ASCII.GetBytes($"list\n"), this.logger, token, errorMessage: "Connection error during help");
 
+            var responseBytes = await this.tcpConnection.ReceiveUntilAsync(Encoding.ASCII.GetBytes("\n> "), logger, token, errorMessage: "Connection error during set note");
+            var response = Encoding.ASCII.GetString(responseBytes);
+            var notes = new List<string>();
             try
             {
-                while (true)
+                foreach (var noteEntry in response.Split('\n'))
                 {
-                    var line = await this.reader!.ReadLineAsync();
-                    if (line != null && line.EndsWith(noteId))
-                    {
-                        return;
-                    }
+                    notes.Add(noteEntry.Split(": ")[1]);
                 }
             }
             catch (Exception e)
@@ -301,13 +164,12 @@ namespace N0t3b00kChecker
                 this.logger.LogWarning($"Get note failed: {e.Message}\n{e.StackTrace}");
                 throw new OfflineException("Connection error during set note");
             }
+            return notes;
         }
 
         public void Dispose()
         {
-            this.tcpClient?.Dispose();
-            this.reader?.Dispose();
-            this.writer?.Dispose();
+            this.tcpConnection?.Dispose();
         }
     }
 }

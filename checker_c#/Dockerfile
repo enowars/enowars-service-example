@@ -11,7 +11,7 @@ COPY . .
 RUN dotnet publish -c Release --self-contained true -o /build
 
 # Copy to runtime container
-FROM ghcr.io/enowars/enochecker-dotnet:nightly
+FROM ghcr.io/enowars/enochecker-dotnet:latest
 COPY --from=build /build /N0t3b00kChecker
 
 CMD ["/N0t3b00kChecker/N0t3b00kChecker.dll"]

@@ -24,7 +24,7 @@ namespace N0t3b00kChecker
             "list - List all notes\n" +
             "exit - Exit!\n" +
             "dump - Dump the database\n" +
-            "get ID\n";
+            "get ID";
         private readonly static Faker faker = new Faker("de");
         private readonly IServiceProvider serviceProvider;
         private readonly ILogger<Checker> logger;
@@ -228,7 +228,16 @@ namespace N0t3b00kChecker
             };
             await client.Register(user, token);
 
-            await client.WaitForUserInList(user.Username, token);
+            var foundUsers = await client.GetUsers(token);
+            foreach (var foundUser in foundUsers)
+            {
+                if (user.Username == foundUser)
+                {
+                    return;
+                }
+            }
+
+            throw new MumbleException("User missing from user list");
         }
 
         private async Task HavocNotesList(CheckerTaskMessage task, CancellationToken token)
@@ -252,7 +261,16 @@ namespace N0t3b00kChecker
             // Deploy flag to note
             user.NoteId = await client.SetNote(user.Note, token);
 
-            await client.WaitForNoteInList(user.NoteId, token);
+            var foundNotes = await client.GetNotes(token);
+            foreach (var foundNote in foundNotes)
+            {
+                if (foundNote == user.NoteId)
+                {
+                    return;
+                }
+            }
+
+            throw new MumbleException("Note missing from user list");
         }
     }
 }
