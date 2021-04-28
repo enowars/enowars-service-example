@@ -1,0 +1,25 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 16
+VisualStudioVersion = 16.0.31129.286
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "N0t3b00kChecker", "N0t3b00kChecker\N0t3b00kChecker.csproj", "{EBF4952C-188D-4BDC-B5E2-07BECFB9C32B}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{EBF4952C-188D-4BDC-B5E2-07BECFB9C32B}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{EBF4952C-188D-4BDC-B5E2-07BECFB9C32B}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{EBF4952C-188D-4BDC-B5E2-07BECFB9C32B}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{EBF4952C-188D-4BDC-B5E2-07BECFB9C32B}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {7080A991-5811-48E5-82F5-E885E77EDDD7}
+	EndGlobalSection
+EndGlobal

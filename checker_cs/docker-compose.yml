@@ -1,0 +1,12 @@
+version: '3'
+services:
+  n0t3b00k-checker:
+    build: .
+    environment:
+      - MONGO_HOST=mongodb
+      - MONGO_PORT=27017
+      #- USE_ELK=true
+    ports:
+      - "8000:80"
+  mongodb:
+    image: mongo
