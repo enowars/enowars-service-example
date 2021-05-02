@@ -265,7 +265,7 @@ impl Checker for NotebookChecker {
     const SERVICE_NAME: &'static str = "n0t3b00k";
     const FLAG_VARIANTS: u64 = 1;
     const NOISE_VARIANTS: u64 = 1;
-    const HAVOC_VARIANTS: u64 = 1;
+    const HAVOC_VARIANTS: u64 = 2;
 
     async fn putflag(&self, checker_request: &CheckerRequest) -> CheckerResult<()> {
         match checker_request.variant_id {
