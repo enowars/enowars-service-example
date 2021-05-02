@@ -68,7 +68,7 @@ impl NotebookChecker {
         let client = Client::with_options(
             ClientOptions::builder()
                 .hosts(vec![StreamAddress {
-                    hostname: "localhost".into(),
+                    hostname: "mongo".into(),
                     port: Some(27017),
                 }])
                 .build(),

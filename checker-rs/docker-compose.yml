@@ -1,12 +1,13 @@
 version: '3'
 
 services:
+  n0t3b00k-checker:
+    build: .
+    # The checker runs a HTTP interface, so we need to map port 5499 to the outside (port 8000).
+    ports:
+      - 8000:5499
+
   mongo:
     image: mongo
-    ports:
-      - 27017:27017
-    # volumes:
-    #   - ./stonksexchange-checker-db:/data/db
-    # environment:
-    #   MONGO_INITDB_ROOT_USERNAME: enoislove
-    #   MONGO_INITDB_ROOT_PASSWORD: enoislife1338
+    volumes:
+      - ./data:/data/db
