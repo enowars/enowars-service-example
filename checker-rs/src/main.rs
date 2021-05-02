@@ -1,7 +1,13 @@
-use enochecker::{async_trait, tokio::{spawn, try_join}};
+use enochecker::{
+    async_trait,
+    tokio::{spawn, try_join},
+};
 use enochecker::{run_checker, Checker, CheckerError, CheckerRequest, CheckerResult};
 
-use fake::{Fake, faker::internet::en::{FreeEmail, Password, SafeEmail, Username}};
+use fake::{
+    faker::internet::en::{FreeEmail, Password, SafeEmail, Username},
+    Fake,
+};
 
 use rand::random;
 use serde::{Deserialize, Serialize};
@@ -12,7 +18,7 @@ use mongodb::{
     Client,
 };
 
-use tracing::{Instrument, error, info, instrument, warn};
+use tracing::{error, info, warn, Instrument};
 
 mod notebook_client;
 use notebook_client::NotebookClient;
@@ -32,16 +38,18 @@ pub struct NotebookUser {
 
 impl NotebookUser {
     fn gen_random(id: String) -> Self {
-        let username: String = match rand::random() {
-            true => match rand::random() {
-                true => FreeEmail().fake(),
-                false => SafeEmail().fake()
+        let username: String = if rand::random() {
+            if rand::random() {
+                FreeEmail().fake()
+            } else {
+                SafeEmail().fake()
             }
-            false => Username().fake(),
+        } else {
+            Username().fake()
         };
-        
+
         Self {
-            username: username,
+            username,
             password: Password(12..24).fake::<String>(),
             note_id: None,
             note: None,
@@ -196,27 +204,23 @@ impl NotebookChecker {
     }
 
     async fn havoc_help(&self, checker_request: &CheckerRequest) -> CheckerResult<()> {
-
-        // Well this will mean that not all service-details will get test-coverage, 
+        // Well this will mean that not all service-details will get test-coverage,
         // however both lines are way too similar to warrant separete variants
-        let help_text = match random() {
-            true => {
-                info!("Getting help in an authenticated state");
-                let user = NotebookUser::gen_random(checker_request.task_chain_id.clone());
-                let mut client = NotebookClient::connect(checker_request).await?;
-                client.register(&user).await?;
-                client.login(user).await?;
-                client.get_help().await?
-            },
-            false => {
-                info!("Getting help immediately");
-                let mut client = NotebookClient::connect(checker_request).await?;
-                client.get_help().await?
-            }
+        let help_text = if random() {
+            info!("Getting help in an authenticated state");
+            let user = NotebookUser::gen_random(checker_request.task_chain_id.clone());
+            let mut client = NotebookClient::connect(checker_request).await?;
+            client.register(&user).await?;
+            client.login(user).await?;
+            client.get_help().await?
+        } else {
+            info!("Getting help immediately");
+            let mut client = NotebookClient::connect(checker_request).await?;
+            client.get_help().await?
         };
 
         if help_text.as_str() != HELP_TEXT {
-            return Err(CheckerError::Mumble("Invalid Help"))
+            return Err(CheckerError::Mumble("Invalid Help"));
         }
 
         Ok(())
@@ -248,13 +252,14 @@ impl NotebookChecker {
         let user_lists: (CheckerResult<_>, CheckerResult<_>) = try_join!(
             spawn(future_auth.instrument(tracing::trace_span!("USERS-Authenticated"))),
             spawn(future_unauth.instrument(tracing::trace_span!("USERS-Immediatly"))),
-        ).map_err(|e| {
+        )
+        .map_err(|e| {
             error!("Failed to run tasks in parallel {:?}", e);
             CheckerError::InternalError("Join Failed")
         })?;
 
         if !user_lists.0?.contains(&user.username) | !user_lists.1?.contains(&user.username) {
-            return Err(CheckerError::Mumble("User missing from list"))
+            return Err(CheckerError::Mumble("User missing from list"));
         }
         Ok(())
     }
@@ -293,7 +298,7 @@ impl Checker for NotebookChecker {
         match checker_request.variant_id {
             0 => self.check_noise_note(checker_request).await,
             _ => Err(CheckerError::InternalError("Invalid variantId")),
-        }    
+        }
     }
 
     async fn havoc(&self, checker_request: &CheckerRequest) -> CheckerResult<()> {

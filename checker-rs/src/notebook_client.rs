@@ -7,9 +7,9 @@ use enochecker::{
     },
     CheckerError, CheckerRequest, CheckerResult,
 };
-use std::{error::Error, io};
+use std::io;
 
-use tracing::{debug, error, info, instrument, warn, Instrument};
+use tracing::{debug, error, info, instrument, warn};
 /// reads until the delimiter given in delim is found or EOF if found or another Error occurs
 ///
 /// # Return
@@ -33,10 +33,8 @@ pub async fn read_until_slice<'a, T: AsyncBufRead + Unpin>(
             ));
         }
         bytes_read += inc_read;
-        if bytes_read >= delim.len() {
-            if &buf[(buf.len() - delim.len())..buf.len()] == delim {
-                return Ok(bytes_read);
-            }
+        if bytes_read >= delim.len() && &buf[(buf.len() - delim.len())..buf.len()] == delim {
+            return Ok(bytes_read);
         }
     }
 }
@@ -121,7 +119,7 @@ impl NotebookClient {
         }
 
         Ok(Self {
-            conn: conn,
+            conn,
             user: None,
         })
     }
@@ -140,7 +138,7 @@ impl NotebookClient {
             })?;
         self.conn.flush().await.map_err(|e| {
             info!("Flush failed -- {}", e);
-            return CheckerError::Mumble("Falied to register user");
+            CheckerError::Mumble("Falied to register user")
         })?;
 
         debug!("Waiting for registration to complete");
@@ -213,15 +211,14 @@ impl NotebookClient {
         .await
         .map_err(|e| {
             warn!("Connection-Error: {}", e);
-            return CheckerErrorUnfilled::from(e).with_message("Set-Note connection error");
+            CheckerErrorUnfilled::from(e).with_message("Set-Note connection error")
         })?;
 
         let response = String::from_utf8(response_buf)?;
         let note_id = response
             .split("Note saved! ID is ")
             .nth(1)
-            .map(|substr| substr.split("!").next())
-            .flatten()
+            .and_then(|substr| substr.split('!').next())
             .ok_or(CheckerError::Mumble("Failed to set note"))?;
 
         self.user.as_mut().unwrap().note = Some(note.to_string());
@@ -282,7 +279,7 @@ impl NotebookClient {
             warn!("Socketerror upon getting help text {:?}", e);
             CheckerErrorUnfilled::from(e).with_message("Connection error upon getting help")
         })?;
-        response_buf.truncate(response_buf.len()-3);
+        response_buf.truncate(response_buf.len() - 3);
         Ok(String::from_utf8(response_buf)?)
     }
 
@@ -308,8 +305,12 @@ impl NotebookClient {
         let users = String::from_utf8(response_buf)?;
 
         let user_arr: Vec<String> = users
-            .split("\n")
-            .filter_map(|line| line.split(": ").nth(1).map(|s| s.to_string()))
+            .split('\n')
+            .filter_map(|line| {
+                line.split(": ")
+                    .nth(1)
+                    .map(std::string::ToString::to_string)
+            })
             .collect();
 
         Ok(user_arr)
@@ -337,8 +338,12 @@ impl NotebookClient {
         let notes = String::from_utf8(response_buf)?;
 
         let note_arr: Vec<String> = notes
-            .split("\n")
-            .filter_map(|line| line.split(": ").nth(1).map(|s| s.to_string()))
+            .split('\n')
+            .filter_map(|line| {
+                line.split(": ")
+                    .nth(1)
+                    .map(std::string::ToString::to_string)
+            })
             .collect();
 
         Ok(note_arr)
