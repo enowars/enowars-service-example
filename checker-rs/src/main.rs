@@ -1,5 +1,9 @@
-use enochecker::async_trait;
+use enochecker::{async_trait, tokio::{spawn, try_join}};
 use enochecker::{run_checker, Checker, CheckerError, CheckerRequest, CheckerResult};
+
+use fake::{Fake, faker::internet::en::{FreeEmail, Password, SafeEmail, Username}};
+
+use rand::random;
 use serde::{Deserialize, Serialize};
 
 use mongodb::{
@@ -8,7 +12,7 @@ use mongodb::{
     Client,
 };
 
-use tracing::{debug, info, trace_span, warn, Instrument};
+use tracing::{Instrument, error, info, instrument, warn};
 
 mod notebook_client;
 use notebook_client::NotebookClient;
@@ -17,7 +21,7 @@ struct NotebookChecker {
     db: Client,
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct NotebookUser {
     username: String,
     password: String,
@@ -25,6 +29,39 @@ pub struct NotebookUser {
     note: Option<String>,
     task_chain_id: String,
 }
+
+impl NotebookUser {
+    fn gen_random(id: String) -> Self {
+        let username: String = match rand::random() {
+            true => match rand::random() {
+                true => FreeEmail().fake(),
+                false => SafeEmail().fake()
+            }
+            false => Username().fake(),
+        };
+        
+        Self {
+            username: username,
+            password: Password(12..24).fake::<String>(),
+            note_id: None,
+            note: None,
+            task_chain_id: id,
+        }
+    }
+}
+
+const DB_NAME: &str = "N0t3b00kCheckerDB";
+
+const HELP_TEXT: &str = "
+This is a notebook service. Commands:
+reg USER PW - Register new account
+log USER PW - Login to account
+set TEXT..... - Set a note
+user  - List all users
+list - List all notes
+exit - Exit!
+dump - Dump the database
+get ID";
 
 impl NotebookChecker {
     async fn new() -> Self {
@@ -38,6 +75,8 @@ impl NotebookChecker {
         )
         .expect("Failed to establish mongo-client");
 
+        //TODO: insert index
+
         for db_name in client
             .list_database_names(None, None)
             .await
@@ -49,18 +88,174 @@ impl NotebookChecker {
         NotebookChecker { db: client }
     }
 
+    async fn store_user(&self, user: NotebookUser) -> CheckerResult<()> {
+        self.db
+            .database(DB_NAME)
+            .collection("users")
+            .insert_one(user, None)
+            .await
+            .map_err(|e| {
+                error!("DB-Insert failed {:?}", e);
+                CheckerError::InternalError("Checker-DB insert failed")
+            })?;
+
+        Ok(())
+    }
+
+    async fn find_user(&self, id: &str) -> CheckerResult<Option<NotebookUser>> {
+        self.db
+            .database(DB_NAME)
+            .collection("users")
+            .find_one(
+                doc! {
+                    "task_chain_id": id,
+                },
+                None,
+            )
+            .await
+            .map_err(|e| {
+                error!("DB-Find failed {:?}", e);
+                CheckerError::InternalError("Checker-DB find failed")
+            })
+    }
+
     async fn deploy_flag_to_note(&self, checker_request: &CheckerRequest) -> CheckerResult<()> {
         let mut client = NotebookClient::connect(checker_request).await?;
-        let mut user = NotebookUser {
-            username: "Kevin".to_string(),
-            password: "Kevinspassword".to_string(),
-            note_id: None,
-            note: None,
-            task_chain_id: checker_request.task_chain_id.clone(),
-        };
+        let user = NotebookUser::gen_random(checker_request.task_chain_id.clone());
 
         client.register(&user).await?;
+        client.login(user).await?;
+        client
+            .set_note(checker_request.flag.as_ref().unwrap())
+            .await?;
 
+        self.store_user(client.user.clone().unwrap()).await?;
+        Ok(())
+    }
+
+    async fn check_flag_note(&self, checker_request: &CheckerRequest) -> CheckerResult<()> {
+        let user = self
+            .find_user(&checker_request.task_chain_id)
+            .await?
+            .ok_or(CheckerError::Mumble("Could not find old user"))?;
+        let mut client = NotebookClient::connect(checker_request).await?;
+
+        client.login(user.clone()).await?;
+        let note_id = user.note_id.as_ref().unwrap();
+
+        let notes = client.get_notes().await?;
+        if !notes.contains(note_id) {
+            warn!("Flag-Id '{}' was not in list", note_id);
+            return Err(CheckerError::Mumble("Flag note is not in list"));
+        }
+
+        let flag = client.get_note().await?;
+        if flag != checker_request.flag.as_ref().unwrap().as_str() {
+            warn!(
+                "Expected flag: '{}', got '{}'",
+                checker_request.flag.as_ref().unwrap(),
+                &flag
+            );
+            return Err(CheckerError::Mumble("Note did not contain correct flag"));
+        }
+
+        Ok(())
+    }
+
+    async fn deploy_noise_to_note(&self, checker_request: &CheckerRequest) -> CheckerResult<()> {
+        let mut client = NotebookClient::connect(checker_request).await?;
+        let user = NotebookUser::gen_random(checker_request.task_chain_id.clone());
+
+        client.register(&user).await?;
+        client.login(user).await?;
+
+        client.set_note("sjgorisdr").await?;
+
+        self.store_user(client.user.unwrap()).await
+    }
+
+    async fn check_noise_note(&self, checker_request: &CheckerRequest) -> CheckerResult<()> {
+        let user = self
+            .find_user(&checker_request.task_chain_id)
+            .await?
+            .ok_or(CheckerError::Mumble("Could not find old user"))?;
+        let mut client = NotebookClient::connect(checker_request).await?;
+
+        client.login(user).await?;
+        let noise = client.get_note().await?;
+
+        if &noise != client.user.as_ref().unwrap().note.as_ref().unwrap() {
+            warn!(
+                "Expected noise note with content {}, instead got {}",
+                client.user.unwrap().note.unwrap(),
+                noise
+            );
+            return Err(CheckerError::Mumble("Invalid note retrieved"));
+        }
+        Ok(())
+    }
+
+    async fn havoc_help(&self, checker_request: &CheckerRequest) -> CheckerResult<()> {
+
+        // Well this will mean that not all service-details will get test-coverage, 
+        // however both lines are way too similar to warrant separete variants
+        let help_text = match random() {
+            true => {
+                info!("Getting help in an authenticated state");
+                let user = NotebookUser::gen_random(checker_request.task_chain_id.clone());
+                let mut client = NotebookClient::connect(checker_request).await?;
+                client.register(&user).await?;
+                client.login(user).await?;
+                client.get_help().await?
+            },
+            false => {
+                info!("Getting help immediately");
+                let mut client = NotebookClient::connect(checker_request).await?;
+                client.get_help().await?
+            }
+        };
+
+        if help_text.as_str() != HELP_TEXT {
+            return Err(CheckerError::Mumble("Invalid Help"))
+        }
+
+        Ok(())
+    }
+
+    async fn havoc_user(&self, checker_request: &CheckerRequest) -> CheckerResult<()> {
+        info!("Getting userlist immediately");
+        let user = NotebookUser::gen_random(checker_request.task_chain_id.clone());
+        let mut client = NotebookClient::connect(checker_request).await?;
+        client.register(&user).await?;
+
+        let user1 = user.clone();
+        let request2 = (*checker_request).clone();
+
+        // Test the userlist as the user itself
+        let future_auth = async move {
+            info!("Foo");
+            client.login(user1).await?;
+            client.get_users().await
+        };
+
+        // And as any other connected user
+        let future_unauth = async move {
+            info!("Foo");
+            let mut client = NotebookClient::connect(&request2).await?;
+            client.get_users().await
+        };
+
+        let user_lists: (CheckerResult<_>, CheckerResult<_>) = try_join!(
+            spawn(future_auth.instrument(tracing::trace_span!("USERS-Authenticated"))),
+            spawn(future_unauth.instrument(tracing::trace_span!("USERS-Immediatly"))),
+        ).map_err(|e| {
+            error!("Failed to run tasks in parallel {:?}", e);
+            CheckerError::InternalError("Join Failed")
+        })?;
+
+        if !user_lists.0?.contains(&user.username) | !user_lists.1?.contains(&user.username) {
+            return Err(CheckerError::Mumble("User missing from list"))
+        }
         Ok(())
     }
 }
@@ -77,56 +272,36 @@ impl Checker for NotebookChecker {
             0 => self.deploy_flag_to_note(checker_request).await,
             _ => Err(CheckerError::InternalError("Invalid variantId")),
         }
-        // self.db
-        //     .database("daw")
-        //     .collection("dawdw")
-        //     .insert_one(
-        //         NotebookChecker {
-        //             username: "penis".to_owned(),
-        //             password: "1234".to_owned(),
-        //             unique_id: checker_request.task_chain_id.clone(),
-        //         },
-        //         None,
-        //     )
-        //     .await
-        //     .expect("Database insert failed");
     }
 
     async fn getflag(&self, checker_request: &CheckerRequest) -> CheckerResult<()> {
-        let _foo: NotebookUser = self
-            .db
-            .database("daw")
-            .collection("dawdw")
-            .find_one(doc! { "unique_id": &checker_request.task_chain_id }, None)
-            .await
-            .unwrap()
-            .unwrap();
-        Ok(())
-    }
-
-    async fn putnoise(&self, _checker_request: &CheckerRequest) -> CheckerResult<()> {
-        // Tracing information https://docs.rs/tracing/
-        async {
-            debug!("Registration successful");
+        match checker_request.variant_id {
+            0 => self.check_flag_note(checker_request).await,
+            _ => Err(CheckerError::InternalError("Invalid variantId")),
         }
-        .instrument(trace_span!("REGISTER"))
-        .await;
-        // instrument async code
-
-        trace_span!("LOGIN").in_scope(|| info!("LOGIN DEBUG-PRINT")); // use in_scope only for syncronous subsections
-
-        warn!("(WARN) PUTNOISE LOGGING");
-        info!("(INFO) PUTNOISE LOGGING");
-        debug!("(DBUG) PUTNOISE LOGGING");
-        Ok(())
     }
 
-    async fn getnoise(&self, _checker_request: &CheckerRequest) -> CheckerResult<()> {
-        Err(CheckerError::Mumble("This is supposed to be a message that hopefully wraps when displayed on the checker-website. I hope <pre></pre> elements automagically add line breaks, since I don't know what I'll do if they don't D:."))
+    async fn putnoise(&self, checker_request: &CheckerRequest) -> CheckerResult<()> {
+        // Tracing information https://docs.rs/tracing/
+        match checker_request.variant_id {
+            0 => self.deploy_noise_to_note(checker_request).await,
+            _ => Err(CheckerError::InternalError("Invalid variantId")),
+        }
     }
 
-    async fn havoc(&self, _checker_request: &CheckerRequest) -> CheckerResult<()> {
-        Ok(())
+    async fn getnoise(&self, checker_request: &CheckerRequest) -> CheckerResult<()> {
+        match checker_request.variant_id {
+            0 => self.check_noise_note(checker_request).await,
+            _ => Err(CheckerError::InternalError("Invalid variantId")),
+        }    
+    }
+
+    async fn havoc(&self, checker_request: &CheckerRequest) -> CheckerResult<()> {
+        match checker_request.variant_id {
+            0 => self.havoc_help(checker_request).await,
+            1 => self.havoc_user(checker_request).await,
+            _ => Err(CheckerError::InternalError("Invalid variantId")),
+        }
     }
 }
 
