@@ -84,6 +84,17 @@ impl NotebookChecker {
         .expect("Failed to establish mongo-client");
 
         //TODO: insert index
+        let index_creation_result = client
+            .database(DB_NAME)
+            .run_command(doc! {
+                "createIndexes": "users",
+                "indexes": [{"key": {"task_chain_id": "hashed"}, "name": "ChainIndex" }]
+            }, None)
+            .await
+            .expect("Failed to create MongoDB Index");
+
+        // No Logger is created yet so we'll just use println!
+        println!("Mongo index created: {}", index_creation_result);
 
         for db_name in client
             .list_database_names(None, None)
