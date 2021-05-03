@@ -1,31 +1,37 @@
 use enochecker::{
-    async_trait,
+    async_trait, run_checker,
     tokio::{spawn, try_join},
+    Checker, CheckerError, CheckerRequest, CheckerResult,
 };
-use enochecker::{run_checker, Checker, CheckerError, CheckerRequest, CheckerResult};
 
 use fake::{
     faker::internet::en::{FreeEmail, Password, SafeEmail, Username},
     Fake,
 };
-
-use rand::random;
-use serde::{Deserialize, Serialize};
-
 use mongodb::{
     bson::doc,
     options::{ClientOptions, StreamAddress},
     Client,
 };
-
+use rand::random;
+use serde::{Deserialize, Serialize};
 use tracing::{error, info, warn, Instrument};
 
 mod notebook_client;
 use notebook_client::NotebookClient;
 
-struct NotebookChecker {
-    db: Client,
-}
+const DB_NAME: &str = "N0t3b00kCheckerDB";
+
+const HELP_TEXT: &str = "
+This is a notebook service. Commands:
+reg USER PW - Register new account
+log USER PW - Login to account
+set TEXT..... - Set a note
+user  - List all users
+list - List all notes
+exit - Exit!
+dump - Dump the database
+get ID";
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct NotebookUser {
@@ -58,18 +64,9 @@ impl NotebookUser {
     }
 }
 
-const DB_NAME: &str = "N0t3b00kCheckerDB";
-
-const HELP_TEXT: &str = "
-This is a notebook service. Commands:
-reg USER PW - Register new account
-log USER PW - Login to account
-set TEXT..... - Set a note
-user  - List all users
-list - List all notes
-exit - Exit!
-dump - Dump the database
-get ID";
+struct NotebookChecker {
+    db: Client,
+}
 
 impl NotebookChecker {
     async fn new() -> Self {
@@ -86,10 +83,13 @@ impl NotebookChecker {
         //TODO: insert index
         let index_creation_result = client
             .database(DB_NAME)
-            .run_command(doc! {
-                "createIndexes": "users",
-                "indexes": [{"key": {"task_chain_id": "hashed"}, "name": "ChainIndex" }]
-            }, None)
+            .run_command(
+                doc! {
+                    "createIndexes": "users",
+                    "indexes": [{"key": {"task_chain_id": "hashed"}, "name": "ChainIndex" }]
+                },
+                None,
+            )
             .await
             .expect("Failed to create MongoDB Index");
 

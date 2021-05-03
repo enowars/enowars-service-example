@@ -1,5 +1,7 @@
 use crate::NotebookUser;
 
+use std::io;
+
 use enochecker::{
     tokio::{
         io::{AsyncBufRead, AsyncBufReadExt, AsyncWriteExt, BufStream},
@@ -7,7 +9,6 @@ use enochecker::{
     },
     CheckerError, CheckerRequest, CheckerResult,
 };
-use std::io;
 
 use tracing::{debug, error, info, instrument, warn};
 /// reads until the delimiter given in delim is found or EOF if found or another Error occurs
@@ -118,10 +119,7 @@ impl NotebookClient {
             return Err(CheckerError::Mumble("Failed to fetch Welcome Banner"));
         }
 
-        Ok(Self {
-            conn,
-            user: None,
-        })
+        Ok(Self { conn, user: None })
     }
 
     #[instrument("REGISTER")]
