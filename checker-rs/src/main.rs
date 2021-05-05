@@ -5,6 +5,8 @@ use enochecker::{
     Checker, CheckerRequest,
 };
 
+use std::env;
+
 use fake::{
     faker::internet::en::{FreeEmail, Password, SafeEmail, Username},
     Fake,
@@ -74,8 +76,13 @@ impl NotebookChecker {
         let client = Client::with_options(
             ClientOptions::builder()
                 .hosts(vec![StreamAddress {
-                    hostname: "mongo".into(),
-                    port: Some(27017),
+                    hostname: env::var("MONGO_HOST").unwrap_or("mongo".to_string()),
+                    port: Some(
+                        env::var("MONGO_PORT")
+                            .unwrap_or("27017".to_string())
+                            .parse()
+                            .expect("MONGO_PORT is not valid!"),
+                    ),
                 }])
                 .build(),
         )

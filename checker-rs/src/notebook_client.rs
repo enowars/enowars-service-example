@@ -76,7 +76,7 @@ impl NotebookClient {
     pub async fn connect(request: &CheckerRequest) -> CheckerResult<Self> {
         info!("Connecting to service");
         let mut conn =
-            match TcpStream::connect(format!("{}:{}", request.address, Self::SERVICE_PORT)).await {
+            match TcpStream::connect((request.address.as_str(), Self::SERVICE_PORT)).await {
                 Ok(conn) => BufStream::new(conn),
                 Err(e) => {
                     info!("Failed to connect to service!, {:?}", e);
