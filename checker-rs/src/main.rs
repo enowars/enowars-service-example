@@ -275,7 +275,7 @@ impl NotebookChecker {
         // Usually this can be done by giving ownership of necessary structs into the closure (meaning clone (or leak :P))
         let user_lists: (CheckerResult<_>, CheckerResult<_>) = try_join!(
             spawn(future_auth.instrument(tracing::trace_span!("USERS-Authenticated"))),
-            spawn(future_unauth.instrument(tracing::trace_span!("USERS-Immediatly"))),
+            spawn(future_unauth.instrument(tracing::trace_span!("USERS-Immediately"))),
         )
         .map_err(|e| {
             error!("Failed to run tasks in parallel {:?}", e);
