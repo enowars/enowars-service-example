@@ -595,7 +595,7 @@ dependencies = [
 [[package]]
 name = "enochecker"
 version = "0.1.0"
-source = "git+https://github.com/enowars/enochecker-rs#b02dace668d200ff9ba251e2bef48ffdef3e21c8"
+source = "git+https://github.com/enowars/enochecker-rs?branch=main#f5e61262c9a34a5bd656aea1184f46535d971305"
 dependencies = [
  "actix-web",
  "async-trait",

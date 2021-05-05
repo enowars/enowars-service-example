@@ -1,7 +1,8 @@
+use enochecker::result::{CheckerError, CheckerResult};
 use enochecker::{
     async_trait, run_checker,
     tokio::{spawn, try_join},
-    Checker, CheckerError, CheckerRequest, CheckerResult,
+    Checker, CheckerRequest,
 };
 
 use fake::{
@@ -248,18 +249,23 @@ impl NotebookChecker {
 
         // Test the userlist as the user itself
         let future_auth = async move {
-            info!("Foo");
+            info!("Trying to get user list");
             client.login(user1).await?;
             client.get_users().await
         };
 
         // And as any other connected user
         let future_unauth = async move {
-            info!("Foo");
+            info!("Trying to get user list");
             let mut client = NotebookClient::connect(&request2).await?;
             client.get_users().await
         };
 
+        // Launch both tasks in parralel
+        // without spawn both would be still on the same thread and as such unable to run simultaneously
+        // but still execute concurrently
+        // Downside are some lifetime issues which need to be resolved
+        // Usually this can be done by giving ownership of necessary structs into the closure (meaning clone (or leak :P))
         let user_lists: (CheckerResult<_>, CheckerResult<_>) = try_join!(
             spawn(future_auth.instrument(tracing::trace_span!("USERS-Authenticated"))),
             spawn(future_unauth.instrument(tracing::trace_span!("USERS-Immediatly"))),
