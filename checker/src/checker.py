@@ -133,7 +133,7 @@ class N0t3b00kChecker(BaseChecker):
                 username: str = self.chain_db["username"]
                 password: str = self.chain_db["password"]
                 noteId: str = self.chain_db["noteId"]
-            except IndexError as ex:
+            except Exception as ex:
                 self.debug(f"error getting notes from db: {ex}")
                 raise BrokenServiceException("Previous putflag failed.")
 
