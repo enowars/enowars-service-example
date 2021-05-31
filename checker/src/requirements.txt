@@ -2,7 +2,7 @@ certifi==2020.12.5
 chardet==4.0.0
 click==7.1.2
 dnspython==1.16.0
-enochecker==0.4.0
+enochecker==0.4.2
 enochecker-cli==0.7.0
 enochecker-core==0.10.0
 eventlet==0.30.2
