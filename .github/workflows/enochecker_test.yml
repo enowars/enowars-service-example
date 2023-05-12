@@ -30,11 +30,11 @@ jobs:
     - name: start service
       run: |
         cd service
-        docker-compose up --build -d
+        docker-compose up --build --force-recreate -d
     - name: start checker
       run: |
         cd checker
-        docker-compose up --build -d
+        docker-compose up --build --force-recreate -d
     - name: obtain Docker host IP
       run: |
         echo "ENOCHECKER_TEST_SERVICE_ADDRESS=$(ip -4 address show dev eth0 | grep inet | awk '{ print $2 }' | sed 's|/.*$||')" >> $GITHUB_ENV
