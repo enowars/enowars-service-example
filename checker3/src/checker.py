@@ -196,7 +196,7 @@ async def putnoise0(task: PutnoiseCheckerTaskMessage, db: ChainDB, logger: Logge
     conn.writer.write(f"exit\n".encode())
     await conn.writer.drain()
 
-    db.set("userdata", (username, password, noteId, randomNote))
+    await db.set("userdata", (username, password, noteId, randomNote))
         
 @checker.getnoise(0)
 async def getnoise0(task: GetnoiseCheckerTaskMessage, db: ChainDB, logger: LoggerAdapter, conn: AsyncSocket):
@@ -217,7 +217,7 @@ async def getnoise0(task: GetnoiseCheckerTaskMessage, db: ChainDB, logger: Logge
     logger.debug(f"Sending command to retrieve note: {noteId}")
     conn.writer.write(f"get {noteId}\n".encode())
     await conn.writer.drain()
-    data = conn.reader.readuntil(b">")
+    data = await conn.reader.readuntil(b">")
     if not randomNote.encode() in data:
         raise MumbleException("Resulting flag was found to be incorrect")
 
