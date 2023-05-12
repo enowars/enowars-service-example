@@ -4,6 +4,8 @@ import random
 import string
 import faker
 
+from collections import namedtuple
+Connection = namedtuple("reader", "writer")
 from typing import Optional
 from logging import LoggerAdapter
 
@@ -70,6 +72,7 @@ async def putflag_note(
     conn: AsyncSocket,
     logger: LoggerAdapter
 ) -> None:
+    conn = Connection(*conn)
 
     # First we need to register a user. So let's create some random strings. (Your real checker should use some funny usernames or so)
     username: str = "".join(
@@ -123,6 +126,8 @@ async def putflag_note(
 async def getflag_note(
     task: GetflagCheckerTaskMessage, db: ChainDB, logger: LoggerAdapter, conn: AsyncSocket
 ) -> None:
+    conn = Connection(*conn)
+
     try:
         username, password, noteId = await db.get("userdata")
     except KeyError:
@@ -154,6 +159,7 @@ async def getflag_note(
 
 @checker.putnoise(0)
 async def putnoise0(task: PutnoiseCheckerTaskMessage, db: ChainDB, logger: LoggerAdapter, conn: AsyncSocket):
+    conn = Connection(*conn)
 
     logger.debug(f"Connecting to the service")
     welcome = conn.read_until(">")
@@ -203,6 +209,9 @@ async def putnoise0(task: PutnoiseCheckerTaskMessage, db: ChainDB, logger: Logge
         
 @checker.getnoise(0)
 async def getnoise0(task: GetnoiseCheckerTaskMessage, db: ChainDB, logger: LoggerAdapter, conn: AsyncSocket):
+    conn = Connection(*conn)
+
+
     try:
         (username, password, noteId, randomNote) = await db.get('userdata')
     except:
@@ -233,6 +242,8 @@ async def getnoise0(task: GetnoiseCheckerTaskMessage, db: ChainDB, logger: Logge
 
 @checker.havoc(0)
 async def havoc0(task: HavocCheckerTaskMessage, logger: LoggerAdapter, conn: AsyncSocket):
+    conn = Connection(*conn)
+
     logger.debug(f"Connecting to service")
     welcome = await conn.reader.readuntil(b">")
 
@@ -260,6 +271,8 @@ async def havoc0(task: HavocCheckerTaskMessage, logger: LoggerAdapter, conn: Asy
 
 @checker.havoc(1)
 async def havoc1(task: HavocCheckerTaskMessage, logger: LoggerAdapter):
+    conn = Connection(*conn)
+
     logger.debug(f"Connecting to service")
     welcome = await conn.reader.readuntil(b">")
 
@@ -290,6 +303,8 @@ async def havoc1(task: HavocCheckerTaskMessage, logger: LoggerAdapter):
 
 @checker.havoc(2)
 async def havoc2(task: HavocCheckerTaskMessage, logger: LoggerAdapter):
+    conn = Connection(*conn)
+
     logger.debug(f"Connecting to service")
     welcome = await conn.reader.readuntil(b">")
 
@@ -336,6 +351,7 @@ async def havoc2(task: HavocCheckerTaskMessage, logger: LoggerAdapter):
 
 @checker.exploit(0)
 async def exploit0(task: ExploitCheckerTaskMessage, searcher: FlagSearcher, conn: AsyncSocket, logger:LoggerAdapter) -> Optional[str]:
+    conn = Connection(*conn)
     welcome = await conn.reader.readuntil(b">")
     conn.writer.write(b"dump\nexit\n")
     await conn.writer.drain()
@@ -346,6 +362,7 @@ async def exploit0(task: ExploitCheckerTaskMessage, searcher: FlagSearcher, conn
 
 @checker.exploit(1)
 async def exploit1(task: ExploitCheckerTaskMessage, searcher: FlagSearcher, conn: AsyncSocket, logger:LoggerAdapter) -> Optional[str]:
+    conn = Connection(*conn)
     welcome = await conn.reader.readuntil(b">")
     conn.writer.write(b"user\n")
     await conn.writer.drain()
@@ -370,6 +387,7 @@ async def exploit1(task: ExploitCheckerTaskMessage, searcher: FlagSearcher, conn
 
 @checker.exploit(2)
 async def exploit2(task: ExploitCheckerTaskMessage, searcher: FlagSearcher, conn: AsyncSocket, logger:LoggerAdapter) -> Optional[str]:
+    conn = Connection(*conn)
     welcome = await conn.reader.readuntil(b">")
     conn.writer.write(b"user\n")
     await conn.writer.drain()
