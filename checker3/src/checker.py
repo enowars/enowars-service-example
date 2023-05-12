@@ -87,10 +87,10 @@ async def putflag_note(
     welcome = await conn.reader.readuntil(b">")
 
     # Register a new user
-    register_user(conn, username, password, logger)
+    await register_user(conn, username, password, logger)
 
     # Now we need to login
-    login_user(conn, username, password, logger)
+    await login_user(conn, username, password, logger)
 
     # Finally, we can post our note!
     logger.debug(f"Sending command to set the flag")
@@ -114,9 +114,6 @@ async def putflag_note(
     conn.writer.write(f"exit\n".encode())
     await conn.writer.drain()
     
-    conn.close()
-    await conn.wait_closed()
-
     # Save the generated values for the associated getflag() call.
     await db.set("userdata", (username, password, noteId))
 
@@ -137,13 +134,13 @@ async def getflag_note(
     await conn.reader.readuntil(b">")
 
     # Let's login to the service
-    login_user(conn, username, password, logger)
+    await login_user(conn, username, password, logger)
 
     # Let´s obtain our note.
     logger.debug(f"Sending command to retrieve note: {noteId}")
     conn.writer.write(f"get {noteId}\n".encode())
     await conn.writer.drain()
-    note = conn.reader.readuntil(b">")
+    note = await conn.reader.readuntil(b">")
     assert_in(
         task.flag.encode(), note, "Resulting flag was found to be incorrect"
     )
@@ -152,9 +149,6 @@ async def getflag_note(
     logger.debug(f"Sending exit command")
     conn.writer.write(f"exit\n".encode())
     await conn.writer.drain()
-    
-    conn.close()
-    await conn.wait_closed()
         
 
 @checker.putnoise(0)
@@ -162,7 +156,7 @@ async def putnoise0(task: PutnoiseCheckerTaskMessage, db: ChainDB, logger: Logge
     conn = Connection(*conn)
 
     logger.debug(f"Connecting to the service")
-    welcome = conn.read_until(">")
+    welcome = await conn.reader.readuntil(b">")
 
     # First we need to register a user. So let's create some random strings. (Your real checker should use some better usernames or so [i.e., use the "faker¨ lib])
     username = "".join(
@@ -176,10 +170,10 @@ async def putnoise0(task: PutnoiseCheckerTaskMessage, db: ChainDB, logger: Logge
     )
 
     # Register another user
-    register_user(conn, username, password, logger)
+    await register_user(conn, username, password, logger)
 
     # Now we need to login
-    login_user(conn, username, password, logger)
+    await login_user(conn, username, password, logger)
 
     # Finally, we can post our note!
     logger.debug(f"Sending command to save a note")
@@ -202,15 +196,11 @@ async def putnoise0(task: PutnoiseCheckerTaskMessage, db: ChainDB, logger: Logge
     conn.writer.write(f"exit\n".encode())
     await conn.writer.drain()
 
-    conn.close()
-    await conn.wait_closed()
-
     db.set("userdata", (username, password, noteId, randomNote))
         
 @checker.getnoise(0)
 async def getnoise0(task: GetnoiseCheckerTaskMessage, db: ChainDB, logger: LoggerAdapter, conn: AsyncSocket):
     conn = Connection(*conn)
-
 
     try:
         (username, password, noteId, randomNote) = await db.get('userdata')
@@ -221,7 +211,7 @@ async def getnoise0(task: GetnoiseCheckerTaskMessage, db: ChainDB, logger: Logge
     welcome = await conn.reader.readuntil(b">")
 
     # Let's login to the service
-    login_user(conn, username, password, logger)
+    await login_user(conn, username, password, logger)
 
     # Let´s obtain our note.
     logger.debug(f"Sending command to retrieve note: {noteId}")
@@ -235,9 +225,6 @@ async def getnoise0(task: GetnoiseCheckerTaskMessage, db: ChainDB, logger: Logge
     logger.debug(f"Sending exit command")
     conn.writer.write(f"exit\n".encode())
     await conn.writer.drain()
-    
-    conn.close()
-    await conn.wait_closed()
 
 
 @checker.havoc(0)
@@ -266,11 +253,8 @@ async def havoc0(task: HavocCheckerTaskMessage, logger: LoggerAdapter, conn: Asy
     ]:
         assert_in(line.encode(), helpstr, "Received incomplete response.")
 
-    conn.close()
-    await conn.wait_closed()
-
 @checker.havoc(1)
-async def havoc1(task: HavocCheckerTaskMessage, logger: LoggerAdapter):
+async def havoc1(task: HavocCheckerTaskMessage, logger: LoggerAdapter, conn: AsyncSocket):
     conn = Connection(*conn)
 
     logger.debug(f"Connecting to service")
@@ -285,8 +269,8 @@ async def havoc1(task: HavocCheckerTaskMessage, logger: LoggerAdapter):
     )
 
     # Register and login a dummy user
-    register_user(conn, username, password, logger)
-    login_user(conn, username, password, logger)
+    await register_user(conn, username, password, logger)
+    await login_user(conn, username, password, logger)
 
     logger.debug(f"Sending user command")
     conn.writer.write(f"user\n".encode())
@@ -298,11 +282,11 @@ async def havoc1(task: HavocCheckerTaskMessage, logger: LoggerAdapter):
     if username:
         assert_in(username.encode(), ret, "Flag username not in user output")
 
-    conn.close()
-    await conn.wait_closed()
+    # conn.writer.close()
+    # await conn.writer.wait_closed()
 
 @checker.havoc(2)
-async def havoc2(task: HavocCheckerTaskMessage, logger: LoggerAdapter):
+async def havoc2(task: HavocCheckerTaskMessage, logger: LoggerAdapter, conn: AsyncSocket):
     conn = Connection(*conn)
 
     logger.debug(f"Connecting to service")
@@ -320,8 +304,8 @@ async def havoc2(task: HavocCheckerTaskMessage, logger: LoggerAdapter):
     )
 
     # Register and login a dummy user
-    register_user(conn, username, password, logger)
-    login_user(conn, username, password, logger)
+    await register_user(conn, username, password, logger)
+    await login_user(conn, username, password, logger)
 
     logger.debug(f"Sending command to save a note")
     conn.writer.write(f"set {randomNote}\n".encode())
@@ -346,16 +330,13 @@ async def havoc2(task: HavocCheckerTaskMessage, logger: LoggerAdapter):
     if not noteId.encode() in data:
         raise MumbleException("List command does not work as intended")
 
-    conn.close()
-    await conn.wait_closed()
-
 @checker.exploit(0)
 async def exploit0(task: ExploitCheckerTaskMessage, searcher: FlagSearcher, conn: AsyncSocket, logger:LoggerAdapter) -> Optional[str]:
     conn = Connection(*conn)
     welcome = await conn.reader.readuntil(b">")
     conn.writer.write(b"dump\nexit\n")
     await conn.writer.drain()
-    data = await conn.reader.read_all()
+    data = await conn.reader.read(-1)
     if flag := searcher.search_flag(data):
         return flag
     raise MumbleException("flag not found")
