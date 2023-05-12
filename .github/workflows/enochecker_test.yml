@@ -55,3 +55,6 @@ jobs:
       with:
         name: logs.tgz
         path: ./logs.tgz
+    - name: Kill docker containers
+      if: failure() || success()
+      run: docker-compose kill
