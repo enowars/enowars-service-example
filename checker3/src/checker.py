@@ -5,7 +5,7 @@ import string
 import faker
 
 from collections import namedtuple
-Connection = namedtuple("reader", "writer")
+Connection = namedtuple("Connection", "reader writer")
 from typing import Optional
 from logging import LoggerAdapter
 
