@@ -4,8 +4,7 @@ import random
 import string
 import faker
 
-from collections import namedtuple
-Connection = namedtuple("Connection", "reader writer")
+
 from typing import Optional
 from logging import LoggerAdapter
 
@@ -25,6 +24,7 @@ from enochecker3 import (
     InternalErrorException,
     PutflagCheckerTaskMessage,
     AsyncSocket,
+    DependencyInjector,
 )
 from enochecker3.utils import assert_equals, assert_in
 
@@ -41,24 +41,42 @@ app = lambda: checker.app
 Utility functions
 """
 
-async def register_user(conn: AsyncSocket, username: str, password: str, logger: LoggerAdapter):
-    logger.debug(
-        f"Sending command to register user: {username} with password: {password}"
-    )
-    conn.writer.write(f"reg {username} {password}\n".encode())
-    await conn.writer.drain()
-    data = await conn.reader.readuntil(b">")
-    if not b"User successfully registered" in data:
-        raise MumbleException("Failed to register user")
+class Connection:
+    def __init__(self, socket: AsyncSocket, logger: LoggerAdapter):
+        self.reader, self.writer = socket[0], socket[1]
+        self.logger = logger
 
-async def login_user(conn: AsyncSocket, username: str, password: str, logger: LoggerAdapter):
-    logger.debug(f"Sending command to login.")
-    conn.writer.write(f"log {username} {password}\n".encode())
-    await conn.writer.drain()
+    async def register_user(self, username: str, password: str):
+        self.logger.debug(
+            f"Sending command to register user: {username} with password: {password}"
+        )
+        self.writer.write(f"reg {username} {password}\n".encode())
+        await self.writer.drain()
+        data = await self.reader.readuntil(b">")
+        if not b"User successfully registered" in data:
+            raise MumbleException("Failed to register user")
 
-    data = await conn.reader.readuntil(b">")
-    if not b"Successfully logged in!" in data:
-        raise MumbleException("Failed to log in!")
+    async def login_user(self, username: str, password: str):
+        self.logger.debug(f"Sending command to login.")
+        self.writer.write(f"log {username} {password}\n".encode())
+        await self.writer.drain()
+
+        data = await self.reader.readuntil(b">")
+        if not b"Successfully logged in!" in data:
+            raise MumbleException("Failed to log in!")
+
+    async def __aenter__(self):
+        print("aenter of connection")
+        #await self.reader.readuntil(b">")
+        return self
+
+    async def __aexit__(self, *args, **kwargs):
+        print("aexit of connection")
+
+
+@checker.register_dependency
+def _get_connection(socket: AsyncSocket, logger: LoggerAdapter) -> Connection:
+    return Connection(socket, logger)
 
 
 """
@@ -69,11 +87,10 @@ CHECKER FUNCTIONS
 async def putflag_note(
     task: PutflagCheckerTaskMessage,
     db: ChainDB,
-    conn: AsyncSocket,
-    logger: LoggerAdapter
+    conn: Connection,
+    logger: LoggerAdapter,    
 ) -> None:
-    conn = Connection(*conn)
-
+    logger.error((conn.reader, conn.writer))
     # First we need to register a user. So let's create some random strings. (Your real checker should use some funny usernames or so)
     username: str = "".join(
         random.choices(string.ascii_uppercase + string.digits, k=12)
@@ -87,10 +104,10 @@ async def putflag_note(
     welcome = await conn.reader.readuntil(b">")
 
     # Register a new user
-    await register_user(conn, username, password, logger)
+    await conn.register_user(username, password)
 
     # Now we need to login
-    await login_user(conn, username, password, logger)
+    await conn.login_user(username, password)
 
     # Finally, we can post our note!
     logger.debug(f"Sending command to set the flag")
@@ -121,10 +138,8 @@ async def putflag_note(
 
 @checker.getflag(0)
 async def getflag_note(
-    task: GetflagCheckerTaskMessage, db: ChainDB, logger: LoggerAdapter, conn: AsyncSocket
+    task: GetflagCheckerTaskMessage, db: ChainDB, logger: LoggerAdapter, conn: Connection
 ) -> None:
-    conn = Connection(*conn)
-
     try:
         username, password, noteId = await db.get("userdata")
     except KeyError:
@@ -134,7 +149,7 @@ async def getflag_note(
     await conn.reader.readuntil(b">")
 
     # Let's login to the service
-    await login_user(conn, username, password, logger)
+    await conn.login_user(username, password)
 
     # Let´s obtain our note.
     logger.debug(f"Sending command to retrieve note: {noteId}")
@@ -152,9 +167,7 @@ async def getflag_note(
         
 
 @checker.putnoise(0)
-async def putnoise0(task: PutnoiseCheckerTaskMessage, db: ChainDB, logger: LoggerAdapter, conn: AsyncSocket):
-    conn = Connection(*conn)
-
+async def putnoise0(task: PutnoiseCheckerTaskMessage, db: ChainDB, logger: LoggerAdapter, conn: Connection):
     logger.debug(f"Connecting to the service")
     welcome = await conn.reader.readuntil(b">")
 
@@ -170,10 +183,10 @@ async def putnoise0(task: PutnoiseCheckerTaskMessage, db: ChainDB, logger: Logge
     )
 
     # Register another user
-    await register_user(conn, username, password, logger)
+    await conn.register_user(username, password)
 
     # Now we need to login
-    await login_user(conn, username, password, logger)
+    await conn.login_user(username, password)
 
     # Finally, we can post our note!
     logger.debug(f"Sending command to save a note")
@@ -199,9 +212,7 @@ async def putnoise0(task: PutnoiseCheckerTaskMessage, db: ChainDB, logger: Logge
     await db.set("userdata", (username, password, noteId, randomNote))
         
 @checker.getnoise(0)
-async def getnoise0(task: GetnoiseCheckerTaskMessage, db: ChainDB, logger: LoggerAdapter, conn: AsyncSocket):
-    conn = Connection(*conn)
-
+async def getnoise0(task: GetnoiseCheckerTaskMessage, db: ChainDB, logger: LoggerAdapter, conn: Connection):
     try:
         (username, password, noteId, randomNote) = await db.get('userdata')
     except:
@@ -211,7 +222,7 @@ async def getnoise0(task: GetnoiseCheckerTaskMessage, db: ChainDB, logger: Logge
     welcome = await conn.reader.readuntil(b">")
 
     # Let's login to the service
-    await login_user(conn, username, password, logger)
+    await conn.login_user(username, password)
 
     # Let´s obtain our note.
     logger.debug(f"Sending command to retrieve note: {noteId}")
@@ -228,9 +239,7 @@ async def getnoise0(task: GetnoiseCheckerTaskMessage, db: ChainDB, logger: Logge
 
 
 @checker.havoc(0)
-async def havoc0(task: HavocCheckerTaskMessage, logger: LoggerAdapter, conn: AsyncSocket):
-    conn = Connection(*conn)
-
+async def havoc0(task: HavocCheckerTaskMessage, logger: LoggerAdapter, conn: Connection):
     logger.debug(f"Connecting to service")
     welcome = await conn.reader.readuntil(b">")
 
@@ -254,9 +263,7 @@ async def havoc0(task: HavocCheckerTaskMessage, logger: LoggerAdapter, conn: Asy
         assert_in(line.encode(), helpstr, "Received incomplete response.")
 
 @checker.havoc(1)
-async def havoc1(task: HavocCheckerTaskMessage, logger: LoggerAdapter, conn: AsyncSocket):
-    conn = Connection(*conn)
-
+async def havoc1(task: HavocCheckerTaskMessage, logger: LoggerAdapter, conn: Connection):
     logger.debug(f"Connecting to service")
     welcome = await conn.reader.readuntil(b">")
 
@@ -269,8 +276,8 @@ async def havoc1(task: HavocCheckerTaskMessage, logger: LoggerAdapter, conn: Asy
     )
 
     # Register and login a dummy user
-    await register_user(conn, username, password, logger)
-    await login_user(conn, username, password, logger)
+    await conn.register_user(username, password)
+    await conn.login_user(username, password)
 
     logger.debug(f"Sending user command")
     conn.writer.write(f"user\n".encode())
@@ -286,9 +293,7 @@ async def havoc1(task: HavocCheckerTaskMessage, logger: LoggerAdapter, conn: Asy
     # await conn.writer.wait_closed()
 
 @checker.havoc(2)
-async def havoc2(task: HavocCheckerTaskMessage, logger: LoggerAdapter, conn: AsyncSocket):
-    conn = Connection(*conn)
-
+async def havoc2(task: HavocCheckerTaskMessage, logger: LoggerAdapter, conn: Connection):
     logger.debug(f"Connecting to service")
     welcome = await conn.reader.readuntil(b">")
 
@@ -304,8 +309,8 @@ async def havoc2(task: HavocCheckerTaskMessage, logger: LoggerAdapter, conn: Asy
     )
 
     # Register and login a dummy user
-    await register_user(conn, username, password, logger)
-    await login_user(conn, username, password, logger)
+    await conn.register_user(username, password)
+    await conn.login_user(username, password)
 
     logger.debug(f"Sending command to save a note")
     conn.writer.write(f"set {randomNote}\n".encode())
@@ -331,8 +336,7 @@ async def havoc2(task: HavocCheckerTaskMessage, logger: LoggerAdapter, conn: Asy
         raise MumbleException("List command does not work as intended")
 
 @checker.exploit(0)
-async def exploit0(task: ExploitCheckerTaskMessage, searcher: FlagSearcher, conn: AsyncSocket, logger:LoggerAdapter) -> Optional[str]:
-    conn = Connection(*conn)
+async def exploit0(task: ExploitCheckerTaskMessage, searcher: FlagSearcher, conn: Connection, logger:LoggerAdapter) -> Optional[str]:
     welcome = await conn.reader.readuntil(b">")
     conn.writer.write(b"dump\nexit\n")
     await conn.writer.drain()
@@ -342,8 +346,7 @@ async def exploit0(task: ExploitCheckerTaskMessage, searcher: FlagSearcher, conn
     raise MumbleException("flag not found")
 
 @checker.exploit(1)
-async def exploit1(task: ExploitCheckerTaskMessage, searcher: FlagSearcher, conn: AsyncSocket, logger:LoggerAdapter) -> Optional[str]:
-    conn = Connection(*conn)
+async def exploit1(task: ExploitCheckerTaskMessage, searcher: FlagSearcher, conn: Connection, logger:LoggerAdapter) -> Optional[str]:
     welcome = await conn.reader.readuntil(b">")
     conn.writer.write(b"user\n")
     await conn.writer.drain()
@@ -367,8 +370,7 @@ async def exploit1(task: ExploitCheckerTaskMessage, searcher: FlagSearcher, conn
     raise MumbleException("flag not found")
 
 @checker.exploit(2)
-async def exploit2(task: ExploitCheckerTaskMessage, searcher: FlagSearcher, conn: AsyncSocket, logger:LoggerAdapter) -> Optional[str]:
-    conn = Connection(*conn)
+async def exploit2(task: ExploitCheckerTaskMessage, searcher: FlagSearcher, conn: Connection, logger:LoggerAdapter) -> Optional[str]:
     welcome = await conn.reader.readuntil(b">")
     conn.writer.write(b"user\n")
     await conn.writer.drain()
