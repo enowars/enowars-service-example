@@ -24,7 +24,6 @@ from enochecker3 import (
     InternalErrorException,
     PutflagCheckerTaskMessage,
     AsyncSocket,
-    DependencyInjector,
 )
 from enochecker3.utils import assert_equals, assert_in
 
@@ -65,14 +64,6 @@ class Connection:
         if not b"Successfully logged in!" in data:
             raise MumbleException("Failed to log in!")
 
-    async def __aenter__(self):
-        print("aenter of connection")
-        #await self.reader.readuntil(b">")
-        return self
-
-    async def __aexit__(self, *args, **kwargs):
-        print("aexit of connection")
-
 
 @checker.register_dependency
 def _get_connection(socket: AsyncSocket, logger: LoggerAdapter) -> Connection:
@@ -90,7 +81,6 @@ async def putflag_note(
     conn: Connection,
     logger: LoggerAdapter,    
 ) -> None:
-    logger.error((conn.reader, conn.writer))
     # First we need to register a user. So let's create some random strings. (Your real checker should use some funny usernames or so)
     username: str = "".join(
         random.choices(string.ascii_uppercase + string.digits, k=12)
