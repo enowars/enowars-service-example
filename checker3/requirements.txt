@@ -1,4 +1,4 @@
-enochecker3==0.7.1
+enochecker3==0.8.1
 uvicorn
 gunicorn
 faker
