@@ -14,7 +14,7 @@ jobs:
     runs-on: self-hosted
     env:
       ENOCHECKER_TEST_CHECKER_ADDRESS: localhost
-      ENOCHECKER_TEST_CHECKER_PORT: 5008
+      ENOCHECKER_TEST_CHECKER_PORT: 12323
 
     steps:
     - uses: actions/checkout@v2
@@ -31,11 +31,11 @@ jobs:
     - name: start service
       run: |
         cd service
-        docker-compose up --build --force-recreate -d
+        docker compose up --build --force-recreate -d
     - name: start checker
       run: |
         cd checker
-        docker-compose up --build --force-recreate -d
+        docker compose up --build --force-recreate -d
     - name: obtain Docker host IP
       run: |
         echo "ENOCHECKER_TEST_SERVICE_ADDRESS=$(ip -4 address show dev eth0 | grep inet | awk '{ print $2 }' | sed 's|/.*$||')" >> $GITHUB_ENV
@@ -59,6 +59,6 @@ jobs:
     - name: Kill docker containers
       if: failure() || success()
       run: |
-        (cd service && docker-compose kill)
-        (cd checker && docker-compose kill)
+        (cd service && docker compose kill)
+        (cd checker && docker compose kill)
 
