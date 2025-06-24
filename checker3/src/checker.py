@@ -80,7 +80,7 @@ async def putflag_note(
     db: ChainDB,
     conn: Connection,
     logger: LoggerAdapter,    
-) -> None:
+) -> Optional[str]:
     # First we need to register a user. So let's create some random strings. (Your real checker should use some funny usernames or so)
     username: str = "".join(
         random.choices(string.ascii_uppercase + string.digits, k=12)
