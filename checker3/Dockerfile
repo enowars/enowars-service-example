@@ -1,4 +1,4 @@
-FROM python:3.9-trixie
+FROM python:3.11-trixie
 RUN apt-get update -y && apt-get upgrade -y 
 
 # add checker user
