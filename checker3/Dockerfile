@@ -1,5 +1,5 @@
-FROM python:3.9-bookworm
-RUN apt-get update && apt-get upgrade -y 
+FROM python:3.9-trixie
+RUN apt-get update -y && apt-get upgrade -y 
 
 # add checker user
 RUN useradd -ms /bin/bash -u 1000 checker
