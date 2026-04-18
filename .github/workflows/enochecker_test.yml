@@ -11,7 +11,7 @@ on:
 
 jobs:
   build:
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     env:
       ENOCHECKER_CHECKER_ADDRESS: localhost
       ENOCHECKER_CHECKER_PORT: 12323
