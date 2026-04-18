@@ -12,8 +12,7 @@ from enochecker3 import (
     ChainDB,
     Enochecker,
     ExploitCheckerTaskMessage,
-    FlagSearcher,
-    BaseCheckerTaskMessage,
+    FlagSearcher,\
     PutflagCheckerTaskMessage,
     GetflagCheckerTaskMessage,
     PutnoiseCheckerTaskMessage,
