@@ -1,4 +1,4 @@
-enochecker3==0.14.0
+git+https://github.com/enowars/enochecker3.git@fix-base-checker-task-message
 uvicorn
 gunicorn
 faker
