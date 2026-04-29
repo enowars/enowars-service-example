@@ -1,5 +1,6 @@
-FROM python:3.11-trixie
+FROM python:3.13-slim-bookworm
 RUN apt-get update -y && apt-get upgrade -y 
+
 
 # add checker user
 RUN useradd -ms /bin/bash -u 1000 checker

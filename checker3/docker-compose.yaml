@@ -1,8 +1,7 @@
-version: '2.1'
-
 services:
   n0t3b00k-checker:
     build: .
+    restart: unless-stopped
     # The checker runs a HTTP interfaces, so we need to map port 3031 to the outside (port 8000).
     ports:
       - 12323:8000
@@ -24,6 +23,7 @@ services:
   # The python checkerlib requires a mongo db!
   n0t3b00k-mongo:
     image: mongo
+    restart: unless-stopped
     #ports:
     #  - 27017:27017
     volumes:
