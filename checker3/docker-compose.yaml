@@ -1,5 +1,11 @@
 version: '2.1'
 
+networks:
+  default:
+    driver: bridge
+    driver_opts:
+      com.docker.network.driver.mtu: 1420
+
 services:
   n0t3b00k-checker:
     build: .
